@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Stand-in for the `claude` CLI: emits Claude Code stream-json and runs the PreToolUse command hook from
+--settings exactly as Claude Code does (stdin JSON → stdout decision). Used by the smoke test only."""
+import json, subprocess, sys, uuid, os
+args = sys.argv[1:]
+prompt = args[1] if len(args) > 1 and not args[1].startswith("--") else None
+settings = json.loads(args[args.index("--settings") + 1])
+resume = args[args.index("--resume") + 1] if "--resume" in args else None
+sid = resume or str(uuid.uuid4())
+hook = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+def out(o): print(json.dumps(o), flush=True)
+out({"type": "system", "subtype": "init", "session_id": sid, "cwd": os.getcwd()})
+state = os.path.join(os.getcwd(), ".fakeclaude-deferred")
+if prompt is None and os.path.exists(state):
+    cmd = open(state).read(); os.remove(state)
+else:
+    cmd = "brain submit job.sh -- --time=00:01:00" if prompt and "submit" in prompt else (
+          "rm -rf " + prompt.split("rm -rf ", 1)[1].split()[0] if prompt and "rm -rf " in prompt else "ls")
+tid = "toolu_" + uuid.uuid4().hex[:10]
+hin = json.dumps({"session_id": sid, "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                  "tool_input": {"command": cmd}, "tool_use_id": tid, "cwd": os.getcwd()})
+dec = subprocess.run(hook, shell=True, input=hin, capture_output=True, text=True).stdout.strip()
+d = json.loads(dec)["hookSpecificOutput"] if dec else {}
+if d.get("permissionDecision") == "defer":
+    open(state, "w").write(cmd)
+    out({"type": "result", "subtype": "success", "session_id": sid, "stop_reason": "tool_deferred", "result": "",
+         "usage": {"input_tokens": 50, "output_tokens": 5}})
+    sys.exit(0)
+out({"type": "assistant", "session_id": sid, "message": {"content": [
+    {"type": "text", "text": f"Running {cmd}"}, {"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": cmd}}]}})
+if d.get("permissionDecision") == "deny":
+    res, err = d.get("permissionDecisionReason", "denied"), True
+else:
+    p = subprocess.run(cmd, shell=True, capture_output=True, text=True); res, err = (p.stdout + p.stderr)[-2000:], p.returncode != 0
+out({"type": "user", "session_id": sid, "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": res, "is_error": err}]}})
+out({"type": "assistant", "session_id": sid, "message": {"content": [{"type": "text", "text": "Done."}]}})
+out({"type": "result", "subtype": "success", "session_id": sid, "stop_reason": "end_turn", "result": "Done.",
+     "usage": {"input_tokens": 120, "output_tokens": 30}})

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cluster-brain"
+version = "0.2.0.dev0"
+description = "Brain Runtime: mobile-first control plane for coding agents and experiments on a SLURM cluster"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "pyyaml>=6",
+  "cryptography>=42",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+claude = ["claude-agent-sdk>=0.1.80"]
+qr = ["qrcode>=7.4"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+brain = "brain.cli:main"
+brain-hook = "brain.hook:main"
+
+[tool.setuptools.packages.find]
+include = ["brain*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
