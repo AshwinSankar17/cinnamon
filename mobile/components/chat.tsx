@@ -5,11 +5,11 @@ import { router } from 'expo-router';
 import { api, describeError } from '@/src/api';
 import { duration, kTokens, toMs } from '@/src/format';
 import { colors, fonts, providerName, type } from '@/src/theme';
-import { parseUnifiedDiff, stepCommand, stepLabel, type Block, type JobInfo, type Step, type Turn } from '@/src/turns';
+import { parseUnifiedDiff, stepCommand, stepLabel, turnFailed, type Block, type JobInfo, type Step, type Turn } from '@/src/turns';
 import type { FileDiff } from '@/src/types';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
-import { Badge, Dot, IconButton, Mono, ProviderPill } from './ui';
+import { Badge, Button, Dot, IconButton, Mono, ProviderPill } from './ui';
 
 // ---------------------------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@ export function Prose({ text }: { text: string }) {
 
 // ---------------------------------------------------------------------------------------------
 
-export function TurnView({ turn, now, onFork }: { turn: Turn; now: number; onFork: (seq: number) => void }) {
+export function TurnView({ turn, now, onFork, onRetry }: { turn: Turn; now: number; onFork: (seq: number) => void; onRetry?: () => Promise<void> }) {
   const live = !turn.ended;
   const [open, setOpen] = useState<boolean | null>(null);
   const expanded = open ?? live;
@@ -90,7 +90,7 @@ export function TurnView({ turn, now, onFork }: { turn: Turn; now: number; onFor
         <BlockView key={b.key} b={b} />
       ))}
 
-      {turn.ended ? <TurnFooter turn={turn} onFork={onFork} /> : null}
+      {turn.ended ? <TurnFooter turn={turn} onFork={onFork} onRetry={onRetry} /> : null}
     </View>
   );
 }
@@ -133,8 +133,10 @@ function StepRow({ s }: { s: Step }) {
   );
 }
 
-function TurnFooter({ turn, onFork }: { turn: Turn; onFork: (seq: number) => void }) {
+function TurnFooter({ turn, onFork, onRetry }: { turn: Turn; onFork: (seq: number) => void; onRetry?: () => Promise<void> }) {
   const p = turn.ended!.payload;
+  const [busy, setBusy] = useState(false);
+  const retry = onRetry && turnFailed(turn) ? () => { setBusy(true); onRetry().finally(() => setBusy(false)); } : null;
   const parts = [
     p.diffstat?.files ? `${p.diffstat.files} ${p.diffstat.files === 1 ? 'file' : 'files'}` : null,
     p.usage ? `${kTokens(p.usage.input_tokens)} in · ${kTokens(p.usage.output_tokens)} out` : null,
@@ -143,6 +145,7 @@ function TurnFooter({ turn, onFork }: { turn: Turn; onFork: (seq: number) => voi
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: -10 }}>
       <IconButton name="fork" label="Fork from this turn" color={colors.text2} iconSize={18} onPress={() => onFork(turn.ended!.seq)} />
+      {retry ? <Button label="Retry" icon="refresh" compact busy={busy} onPress={retry} accessibilityLabel="Retry this message" /> : null}
       <View style={{ flex: 1 }} />
       <Mono style={{ color: colors.text3 }}>{parts.join(' · ')}</Mono>
     </View>

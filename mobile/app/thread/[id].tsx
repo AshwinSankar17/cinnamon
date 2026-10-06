@@ -15,7 +15,7 @@ import { duration, toMs } from '@/src/format';
 import { useTick } from '@/src/hooks';
 import { getEvents, getThread, lastSeq, mergeEvents, upsertEvents, upsertThreads } from '@/src/store';
 import { colors, fonts, providerName, type } from '@/src/theme';
-import { buildItems, hasOpenTurn, type Item } from '@/src/turns';
+import { buildItems, hasOpenTurn, type Item, type Turn } from '@/src/turns';
 import type { BrainEvent, Provider, Thread } from '@/src/types';
 import { brainSocket } from '@/src/ws';
 
@@ -187,6 +187,18 @@ export default function ThreadScreen() {
     }
   };
 
+  // Retry the latest turn only: resend the message it answered (or ask a woken turn to pick up again).
+  const lastTurn = items.findLast((i) => i.kind === 'turn');
+  const retry = async (t: Turn) => {
+    try {
+      await api.sendMessage(id, t.prompt ?? 'The last turn failed. Pick up where you left off.', uuid());
+      atBottom.current = true;
+      if (!brainSocket.isOpen) await catchUp();
+    } catch (e) {
+      Alert.alert('Could not retry', describeError(e));
+    }
+  };
+
   const onStop = async () => {
     try {
       await api.stopThread(id);
@@ -238,7 +250,15 @@ export default function ThreadScreen() {
           ListFooterComponent={loadErr && items.length ? <EmptyNote>{loadErr}</EmptyNote> : null}
           renderItem={({ item }) => {
             if (item.kind === 'user') return <UserBubble text={item.text} />;
-            if (item.kind === 'turn') return <TurnView turn={item} now={now} onFork={(seq) => setSheet({ forkAtSeq: seq })} />;
+            if (item.kind === 'turn')
+              return (
+                <TurnView
+                  turn={item}
+                  now={now}
+                  onFork={(seq) => setSheet({ forkAtSeq: seq })}
+                  onRetry={item === lastTurn && !running ? () => retry(item) : undefined}
+                />
+              );
             return <BlockView b={item.block} />;
           }}
         />

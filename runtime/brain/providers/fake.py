@@ -81,6 +81,8 @@ class FakeProvider:
                               usage={"input_tokens": 10, "output_tokens": 5})
 
         prompt = ctx.prompt
+        if "simulate failure" in prompt:
+            return TurnResult(session_id=sid, error="simulated provider failure")
         if "edit" in prompt:
             async def run_edit():
                 (ctx.cwd / "notes.md").write_text(f"# Notes\n\n{prompt}\n")
