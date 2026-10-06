@@ -106,8 +106,7 @@ export type Turn = {
   steps: Step[];
   blocks: Block[];
   ended?: TurnEnded;
-  /** the owner's message this turn answered; null for wake-ups (approval decided, job finished) */
-  prompt: string | null;
+  retry: boolean; // a re-run of the previous failed or stopped turn
 };
 
 export type Item =
@@ -130,7 +129,6 @@ export function buildItems(events: BrainEvent[]): Item[] {
   const jobs = new Map<string, Extract<Block, { kind: 'job' }>>();
   let current: Turn | null = null;
   let turnCount = 0;
-  let lastUser: string | null = null;
 
   const container = (e: BrainEvent): Block[] | null => {
     const byId = e.turn_id ? turns.get(e.turn_id) : undefined;
@@ -149,7 +147,6 @@ export function buildItems(events: BrainEvent[]): Item[] {
     switch (e.type) {
       case 'user.message':
         items.push({ kind: 'user', key, text: e.payload.text, seq: e.seq, fromDevice: e.actor?.device_id });
-        lastUser = e.payload.text;
         break;
 
       case 'turn.started': {
@@ -164,9 +161,8 @@ export function buildItems(events: BrainEvent[]): Item[] {
           startSeq: e.seq,
           steps: [],
           blocks: [],
-          prompt: e.payload.wake_reason ? null : lastUser,
+          retry: !!e.payload.retry_of,
         };
-        lastUser = null;
         turns.set(turnId, t);
         items.push(t);
         current = t;

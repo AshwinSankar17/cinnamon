@@ -64,7 +64,7 @@ type EventBase<T extends string, P> = {
 };
 
 export type UserMessage = EventBase<'user.message', { text: string; attachments?: unknown[] }>;
-export type TurnStarted = EventBase<'turn.started', { turn_id: string; provider: Provider; wake_reason?: string | null }>;
+export type TurnStarted = EventBase<'turn.started', { turn_id: string; provider: Provider; wake_reason?: string | null; retry_of?: string | null }>;
 export type AssistantText = EventBase<'assistant.text', { text: string }>;
 export type ToolStarted = EventBase<
   'tool.started',

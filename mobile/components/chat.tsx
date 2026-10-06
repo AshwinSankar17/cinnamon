@@ -46,7 +46,7 @@ export function TurnView({ turn, now, onFork, onRetry }: { turn: Turn; now: numb
         <Text style={{ fontFamily: fonts.sansSemi, fontSize: 13, color: colors.text }}>
           {providerName[String(turn.provider)] ?? String(turn.provider)}
         </Text>
-        <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.text3 }}>turn {turn.index}</Text>
+        <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.text3 }}>turn {turn.index}{turn.retry ? ' · retry' : ''}</Text>
       </View>
 
       {n > 0 || live ? (

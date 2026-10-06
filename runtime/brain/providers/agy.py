@@ -17,13 +17,12 @@ import asyncio
 import json
 import os
 import shutil
-import signal
 import subprocess
 import sys
 from pathlib import Path
 
 from .. import transcript
-from .base import TurnContext, TurnResult
+from .base import TurnContext, TurnResult, kill_group, stop_process
 
 DEFAULT_APP_DIR = "antigravity-cli-profiles/brain"  # relative to ~/.gemini, like agy's own --app_data_dir use
 BASE_ALLOW = ["read_file(/)", "command(ls)", "command(pwd)", "command(cat)", "command(head)", "command(tail)",
@@ -51,9 +50,7 @@ class AgyProvider:
         self._procs: dict[str, asyncio.subprocess.Process] = {}
 
     async def interrupt(self, thread_id: str) -> None:
-        p = self._procs.get(thread_id)
-        if p and p.returncode is None:
-            p.send_signal(signal.SIGINT)
+        await stop_process(self._procs.get(thread_id))  # SIGINT records the turn; escalates only if ignored
 
     # ---- setup -----------------------------------------------------------------------------------
     @staticmethod
@@ -141,7 +138,7 @@ class AgyProvider:
         cmd += ["--dangerously-skip-permissions"] if ctx.extra.get("agy_permissions") == "skip" else []
         proc = await asyncio.create_subprocess_exec(
             *cmd, cwd=str(ctx.cwd), env={**os.environ, **ctx.env}, stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=16 * 1024 * 1024)
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=16 * 1024 * 1024, start_new_session=True)
         self._procs[ctx.thread_id] = proc
         run = {"blocked": [], "last_cmd": None}
         try:
@@ -157,6 +154,7 @@ class AgyProvider:
                 res.error = err or f"agy exited {proc.returncode}"
         finally:
             self._procs.pop(ctx.thread_id, None)
+            kill_group(proc)  # the turn was cancelled mid-stream: leave nothing running
         return run["blocked"]
 
     def _map(self, msg: dict, ctx: TurnContext, res: TurnResult, run: dict | None = None) -> None:

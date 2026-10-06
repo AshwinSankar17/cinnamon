@@ -403,6 +403,16 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
         await brain.stop(tid)
         return {"ok": True}
 
+    @app.post("/v1/threads/{tid}/retry")
+    async def retry(tid: str, device: str = Depends(auth)) -> dict:  # async: it starts a turn on the event loop
+        try:
+            brain.retry_turn(tid)
+        except KeyError:
+            raise HTTPException(404, "no such thread")
+        except RuntimeError as e:
+            raise HTTPException(409, str(e))
+        return {"ok": True}
+
     @app.get("/v1/threads/{tid}/events")
     def events(tid: str, after_seq: int = 0, limit: int = 200, device: str = Depends(auth)) -> dict:
         evs = brain.events.replay(tid, after_seq, limit)

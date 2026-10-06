@@ -14,14 +14,13 @@ import asyncio
 import json
 import os
 import shutil
-import signal
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
 from .. import transcript
-from .base import TurnContext, TurnResult
+from .base import TurnContext, TurnResult, kill_group, stop_process
 
 READ_TOOLS = {"Read", "Glob", "Grep", "LS", "WebFetch", "WebSearch"}
 EDIT_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
@@ -102,9 +101,7 @@ class ClaudeProvider:
         return sid
 
     async def interrupt(self, thread_id: str) -> None:
-        p = self._procs.get(thread_id)
-        if p and p.returncode is None:
-            p.send_signal(signal.SIGINT)  # SIGINT records the turn; SIGTERM would leave it unfinished
+        await stop_process(self._procs.get(thread_id))  # SIGINT records the turn; escalates only if ignored
 
     def _cmd(self, ctx: TurnContext) -> list[str]:
         cmd = [self.binary, "-p"]
@@ -124,7 +121,7 @@ class ClaudeProvider:
         proc = await asyncio.create_subprocess_exec(
             *self._cmd(ctx), cwd=str(ctx.cwd), env=env,
             stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            limit=16 * 1024 * 1024,
+            limit=16 * 1024 * 1024, start_new_session=True,
         )
         self._procs[ctx.thread_id] = proc
         res = TurnResult()
@@ -146,6 +143,7 @@ class ClaudeProvider:
                 res.error = err or f"claude exited {proc.returncode}"
         finally:
             self._procs.pop(ctx.thread_id, None)
+            kill_group(proc)  # the turn was cancelled mid-stream: leave nothing running
         return res
 
     def _map(self, msg: dict, ctx: TurnContext, res: TurnResult, tools: dict[str, str]) -> None:

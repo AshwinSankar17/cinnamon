@@ -496,6 +496,7 @@ export const api = {
     }),
 
   jobs: () => authed<Job[]>('GET', '/v1/jobs'),
+  retryTurn: (id: string) => authed<{ ok: boolean }>('POST', `/v1/threads/${encodeURIComponent(id)}/retry`, {}),
   cancelJob: (id: string) => authed<{ ok: boolean }>('POST', `/v1/jobs/${encodeURIComponent(id)}/cancel`, {}),
 
   pause: async () => {

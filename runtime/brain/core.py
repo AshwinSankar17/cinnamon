@@ -120,6 +120,7 @@ class Brain:
         self._turn_counts: dict[str, dict[str, int]] = {}
         self._queued: dict[str, list[str]] = {}
         self._elevate: set[str] = set()
+        self._stopping: set[str] = set()  # the owner pressed Stop on this thread's running turn
         self._resume_after: dict[str, str | None] = {}  # decisions that arrived while their turn was still running  # threads whose next turn may leave the OS sandbox (an approval was granted)
 
     # ---- pause / disable -------------------------------------------------------------------------
@@ -402,23 +403,46 @@ class Brain:
         self._start(thread_id, text)
         return ev["seq"]
 
-    def _start(self, thread_id: str, prompt: str | None, wake_reason: str | None = None) -> None:
-        task = asyncio.create_task(self._run_turn(thread_id, prompt, wake_reason))
+    def _start(self, thread_id: str, prompt: str | None, wake_reason: str | None = None,
+               retry_of: str | None = None) -> None:
+        task = asyncio.create_task(self._run_turn(thread_id, prompt, wake_reason, retry_of))
         self._tasks[thread_id] = task
 
     async def stop(self, thread_id: str, reason: str = "Stopped from the phone") -> None:
         t = self.thread(thread_id)
         task = self._tasks.get(thread_id)
         if t and task and not task.done():
+            self._stopping.add(thread_id)
             prov = self.providers.get(t["provider"])
             if prov:
-                await prov.interrupt(thread_id)
+                await prov.interrupt(thread_id)  # the model's own stop; it force-kills only if that is ignored
             try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=20)
+                await asyncio.wait_for(asyncio.shield(task), timeout=10)
             except asyncio.TimeoutError:
                 task.cancel()
+            self._stopping.discard(thread_id)
             self.events.append(thread_id, "system.notice", {"text": reason})
         self._queued.pop(thread_id, None)
+
+    def retry_turn(self, thread_id: str) -> None:
+        """Run the thread's last turn again, with the same prompt, when it failed or was stopped."""
+        t = self.thread(thread_id)
+        if not t:
+            raise KeyError(thread_id)
+        if thread_id in self._tasks and not self._tasks[thread_id].done():
+            raise RuntimeError("a turn is running; stop it first")
+        last = self.db.one("SELECT * FROM turns WHERE thread_id=? ORDER BY started_seq DESC LIMIT 1", (thread_id,))
+        if not last or last["ended_at"] is None or last["stop_reason"] not in ("error", "cancelled"):
+            raise RuntimeError("the last turn did not fail or stop; send a new message instead")
+        # a retry replaces any automatic resume the failure scheduled (e.g. after a usage limit)
+        self.db.x("UPDATE waits SET state='cancelled' WHERE thread_id=? AND state='open' AND kind='provider_quota_reset'",
+                  (thread_id,))
+        if t["archived"]:
+            self.db.x("UPDATE threads SET archived=0, updated_at=? WHERE id=?", (now(), thread_id))
+        prompt = last["prompt"]
+        if prompt is None and last["wake_reason"]:  # a woken turn (approval decided, job done) has no saved prompt
+            prompt = "Your previous turn failed or was stopped. Pick up where you left off."
+        self._start(thread_id, prompt, last["wake_reason"], retry_of=last["turn_id"])
 
     async def pretool(self, thread_id: str, tool_name: str, tool_input: dict, tool_use_id: str | None) -> dict:
         """The single decision path for every tool call (called by brain-hook and in-process providers)."""
@@ -464,7 +488,8 @@ class Brain:
                      {"thread_id": thread_id, "approval_id": aid})
         return {"decision": "defer", "reason": "Waiting for the owner's approval on their phone. End your turn."}
 
-    async def _run_turn(self, thread_id: str, prompt: str | None, wake_reason: str | None = None) -> None:
+    async def _run_turn(self, thread_id: str, prompt: str | None, wake_reason: str | None = None,
+                        retry_of: str | None = None) -> None:
         t = self.thread(thread_id)
         prov = self.providers[t["provider"]]
         turn_id = f"turn_{uuid.uuid4().hex[:12]}"
@@ -472,9 +497,10 @@ class Brain:
         started = now()
         self._set_state(thread_id, "running")
         start_ev = self.events.append(thread_id, "turn.started", {"turn_id": turn_id, "provider": t["provider"],
-                                                                   "wake_reason": wake_reason}, turn_id=turn_id)
-        self.db.x("INSERT INTO turns(turn_id, thread_id, provider, started_seq, started_at) VALUES (?,?,?,?,?)",
-                  (turn_id, thread_id, t["provider"], start_ev["seq"], started))
+                                                                   "wake_reason": wake_reason, "retry_of": retry_of},
+                                      turn_id=turn_id)
+        self.db.x("INSERT INTO turns(turn_id, thread_id, provider, started_seq, started_at, prompt, wake_reason)"
+                  " VALUES (?,?,?,?,?,?,?)", (turn_id, thread_id, t["provider"], start_ev["seq"], started, prompt, wake_reason))
         pre_ref = None
         if t["mode"] == "worktree" and t["worktree"]:
             try:
@@ -498,7 +524,9 @@ class Brain:
         ctx = self.provider_ctx(t, prompt, emit, sess["native_session_id"] if sess else None)
         self._elevate.discard(thread_id)  # one turn only
         missing = self.transcript(thread_id, sess["canon_synced"] if sess else 0)  # history this provider lacks
-        if prompt is not None:
+        if retry_of and missing and missing[-1] == {"k": "user", "text": prompt}:
+            missing = missing[:-1]  # the failed turn's prompt: it is sent again below, not replayed
+        if prompt is not None and not retry_of:  # a retry's prompt is already in the transcript
             self._append_transcript(thread_id, "user", turn_id, [{"k": "user", "text": prompt}])
         self.ir.log("provider.start", thread=thread_id, provider=t["provider"], turn=turn_id)
         try:
@@ -510,6 +538,11 @@ class Brain:
         except Exception as e:  # provider crash must never corrupt the thread
             log.exception("provider failed")
             res = TurnResult(error=f"{type(e).__name__}: {e}")
+        if thread_id in self._stopping:  # the owner stopped it: an interrupted exit is not a failure
+            self._stopping.discard(thread_id)
+            res.stop_reason, res.error, res.rate_limited_until = "cancelled", None, None
+        elif res.error and res.stop_reason in (None, "end_turn"):
+            res.stop_reason = "error"
         self.ir.log("provider.end", thread=thread_id, provider=t["provider"], turn=turn_id,
                     stop=res.stop_reason, error=(res.error or "")[:120] or None)
 

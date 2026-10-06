@@ -209,6 +209,8 @@ MIGRATIONS = [
     ("devices", "web_push", "TEXT"),                                      # PWA Web Push subscription (JSON)
     ("devices", "approved", "INTEGER NOT NULL DEFAULT 1"),                # 0 = paired but waiting for an existing device
     ("jobs", "label", "TEXT"),                                            # what the job is, e.g. its script name
+    ("turns", "prompt", "TEXT"),                                          # what the turn was asked, for Retry
+    ("turns", "wake_reason", "TEXT"),
 ]
 
 

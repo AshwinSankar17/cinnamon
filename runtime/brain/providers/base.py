@@ -1,6 +1,9 @@
 """Provider adapter contract. A provider runs one turn and reports normalized events through ctx.emit."""
 from __future__ import annotations
 
+import asyncio
+import os
+import signal
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Protocol
@@ -48,3 +51,31 @@ class Provider(Protocol):
     async def run_turn(self, ctx: TurnContext) -> TurnResult: ...
 
     async def interrupt(self, thread_id: str) -> None: ...
+
+
+STOP_GRACE = 15.0  # seconds a CLI gets to honour its own interrupt before it is terminated
+
+
+async def stop_process(proc: asyncio.subprocess.Process | None, grace: float | None = None) -> None:
+    """Stop a provider CLI the way it stops itself: SIGINT, as Ctrl+C, so it aborts the turn and records it in its own
+    session. Only if it ignores that (hung) is its whole process group, tool commands included, terminated."""
+    if not proc or proc.returncode is not None:
+        return
+    proc.send_signal(signal.SIGINT)
+    for sig, wait in ((None, STOP_GRACE if grace is None else grace), (signal.SIGTERM, 5.0), (signal.SIGKILL, 5.0)):
+        if sig:
+            kill_group(proc, sig)
+        try:
+            await asyncio.wait_for(proc.wait(), wait)
+            return
+        except asyncio.TimeoutError:
+            continue
+
+
+def kill_group(proc: asyncio.subprocess.Process, sig: int = signal.SIGKILL) -> None:
+    """Signal the CLI and everything it started (providers are spawned with start_new_session=True)."""
+    if proc.returncode is None:
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            pass

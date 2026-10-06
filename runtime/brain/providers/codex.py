@@ -15,13 +15,12 @@ import json
 import os
 import re
 import shutil
-import signal
 import sys
 import time
 from pathlib import Path
 
 from .. import transcript
-from .base import TurnContext, TurnResult
+from .base import TurnContext, TurnResult, kill_group, stop_process
 
 BASH_WRAP = re.compile(r"^/bin/(?:ba)?sh -lc '(.*)'$", re.S)
 
@@ -41,9 +40,7 @@ class CodexProvider:
         self._procs: dict[str, asyncio.subprocess.Process] = {}
 
     async def interrupt(self, thread_id: str) -> None:
-        p = self._procs.get(thread_id)
-        if p and p.returncode is None:
-            p.send_signal(signal.SIGINT)
+        await stop_process(self._procs.get(thread_id))  # SIGINT records the turn; escalates only if ignored
 
     @staticmethod
     def _home(ctx: TurnContext) -> Path:
@@ -77,7 +74,7 @@ class CodexProvider:
     async def _spawn(self, ctx: TurnContext, cmd: list[str]) -> asyncio.subprocess.Process:
         return await asyncio.create_subprocess_exec(
             *cmd, cwd=str(ctx.cwd), env={**os.environ, **ctx.env}, stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=16 * 1024 * 1024)
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=16 * 1024 * 1024, start_new_session=True)
 
     async def run_turn(self, ctx: TurnContext) -> TurnResult:
         self._install_hook(ctx)
@@ -97,6 +94,7 @@ class CodexProvider:
                 res.error = err or f"codex exited {proc.returncode}"
         finally:
             self._procs.pop(ctx.thread_id, None)
+            kill_group(proc)  # the turn was cancelled mid-stream: leave nothing running
         if res.error and re.search(r"usage limit|rate limit|quota", res.error, re.I):
             res.rate_limited_until = time.time() + 3600  # ponytail: Codex reports no reset time in exec --json
         return res

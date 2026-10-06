@@ -15,7 +15,7 @@ import { duration, toMs } from '@/src/format';
 import { useTick } from '@/src/hooks';
 import { getEvents, getThread, lastSeq, mergeEvents, upsertEvents, upsertThreads } from '@/src/store';
 import { colors, fonts, providerName, type } from '@/src/theme';
-import { buildItems, hasOpenTurn, type Item, type Turn } from '@/src/turns';
+import { buildItems, hasOpenTurn, type Item } from '@/src/turns';
 import type { BrainEvent, Provider, Thread } from '@/src/types';
 import { brainSocket } from '@/src/ws';
 
@@ -187,11 +187,11 @@ export default function ThreadScreen() {
     }
   };
 
-  // Retry the latest turn only: resend the message it answered (or ask a woken turn to pick up again).
+  // Only the latest turn can be retried: Brain runs it again with the same prompt.
   const lastTurn = items.findLast((i) => i.kind === 'turn');
-  const retry = async (t: Turn) => {
+  const retry = async () => {
     try {
-      await api.sendMessage(id, t.prompt ?? 'The last turn failed. Pick up where you left off.', uuid());
+      await api.retryTurn(id);
       atBottom.current = true;
       if (!brainSocket.isOpen) await catchUp();
     } catch (e) {
@@ -256,7 +256,7 @@ export default function ThreadScreen() {
                   turn={item}
                   now={now}
                   onFork={(seq) => setSheet({ forkAtSeq: seq })}
-                  onRetry={item === lastTurn && !running ? () => retry(item) : undefined}
+                  onRetry={item === lastTurn && !running ? retry : undefined}
                 />
               );
             return <BlockView b={item.block} />;
