@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { ClusterChip, ConnectionBanner } from '@/components/ConnectionBanner';
+import { Icon } from '@/components/Icon';
+import { ACTIVE, JobRow, jobColor, jobLabel } from '@/components/JobRow';
 import { Button, Card, Dot, EmptyNote, IconButton, Mono, ProviderPill, SectionLabel, TabHeader } from '@/components/ui';
 import { api, describeError } from '@/src/api';
 import { useConnection } from '@/src/connection';
@@ -13,7 +15,6 @@ import type { Approval, Job, Pending, Thread } from '@/src/types';
 
 type InboxData = { pending: Pending; running: Thread[]; byId: Record<string, Thread>; leftAt: number | null };
 
-const RUNNING_JOB = new Set(['running', 'pending', 'configuring', 'completing', 'requeued', 'submitted']);
 
 async function loadInbox(): Promise<InboxData> {
   const [pending, running, leftAt] = await Promise.all([
@@ -33,7 +34,7 @@ function sinceProse(d: InboxData, paused: boolean): string {
   if (typeof s.text === 'string' && s.text) return s.text;
   if (typeof s.summary === 'string' && s.summary) return s.summary;
   const parts: string[] = [];
-  const done = d.pending.jobs.filter((j) => !RUNNING_JOB.has(j.state.toLowerCase()));
+  const done = d.pending.jobs.filter((j) => !ACTIVE.has(j.state.toLowerCase()));
   const failed = done.filter((j) => /fail|timeout|out_of_memory|node_fail/i.test(j.state));
   const finished = done.length - failed.length;
   const jobs = (n: number) => (n === 1 ? 'job' : 'jobs');
@@ -41,11 +42,21 @@ function sinceProse(d: InboxData, paused: boolean): string {
   else if (finished) parts.push(`${cap(word(finished))} ${jobs(finished)} finished.`);
   else if (failed.length) parts.push(`${cap(word(failed.length))} ${jobs(failed.length)} failed.`);
   if (typeof s.files_changed === 'number' && s.files_changed > 0) parts.push(`${cap(word(s.files_changed))} files changed.`);
-  const needs = d.pending.approvals.length + d.pending.threads_needing_you.length;
+  const needs = d.pending.approvals.length + needsThreads(d.pending).length + (d.pending.listening?.length ?? 0);
   if (d.running.length) parts.push(`${cap(word(d.running.length))} ${d.running.length === 1 ? 'thread is' : 'threads are'} working.`);
   if (paused) parts.push('Brain is paused; nothing new will start until you resume.');
   parts.push(needs ? `${cap(word(needs))} ${needs === 1 ? 'thing needs' : 'things need'} you.` : 'Nothing needs you.');
   return parts.join(' ');
+}
+
+/** A thread waiting on an approval is listed once, as that approval. */
+function needsThreads(p: Pending): Thread[] {
+  const withApproval = new Set(p.approvals.map((a) => a.thread_id));
+  return p.threads_needing_you.filter((t) => !withApproval.has(t.id));
+}
+
+function count(label: string, n: number | null): string {
+  return n ? `${label} · ${n}` : label;
 }
 
 function cap(s: string) {
@@ -70,8 +81,15 @@ export default function InboxScreen() {
   }, [conn.paused]);
 
   const sinceMs = data ? (toMs(data.pending.since?.ts) ?? data.leftAt) : null;
-  const runningJobs = data?.pending.jobs.filter((j) => RUNNING_JOB.has(j.state.toLowerCase())) ?? [];
-  const doneJobs = data?.pending.jobs.filter((j) => !RUNNING_JOB.has(j.state.toLowerCase())) ?? [];
+  const jobs = data?.pending.jobs ?? [];
+  const runningJobs = jobs.filter((j) => ACTIVE.has(j.state.toLowerCase()));
+  const doneJobs = jobs.filter((j) => !ACTIVE.has(j.state.toLowerCase()));
+  const failed = doneJobs.filter((j) => jobColor(j.state) === colors.failed).length;
+  const runningIds = new Set(data?.running.map((t) => t.id));
+  const looseJobs = runningJobs.filter((j) => !j.thread_id || !runningIds.has(j.thread_id)); // jobs of threads not shown below
+  const needs = data ? [...data.pending.approvals.map((a) => a.id), ...needsThreads(data.pending).map((t) => t.id)].length : 0;
+  const listening = data?.pending.listening ?? [];
+  const quiet = data && !needs && !listening.length && !runningJobs.length && !data.running.length;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>
@@ -105,31 +123,51 @@ export default function InboxScreen() {
           </View>
         ) : null}
 
-        <SectionLabel>Needs you</SectionLabel>
-        {data && !data.pending.approvals.length && !data.pending.threads_needing_you.length ? (
-          <EmptyNote>Nothing is waiting on you.</EmptyNote>
-        ) : null}
+        {needs ? <SectionLabel>{count('Needs you', needs)}</SectionLabel> : null}
         {data?.pending.approvals.map((a) => (
           <ApprovalCard key={a.id} a={a} thread={data.byId[a.thread_id]} />
         ))}
-        {data?.pending.threads_needing_you.map((t) => <NeedsThreadCard key={t.id} t={t} />)}
+        {data ? needsThreads(data.pending).map((t) => <NeedsThreadCard key={t.id} t={t} />) : null}
 
-        <SectionLabel>Running</SectionLabel>
-        {data && !runningJobs.length && !data.running.length ? <EmptyNote>Nothing is running.</EmptyNote> : null}
-        <View style={{ gap: 8 }}>
-          {runningJobs.map((j) => (
-            <JobRow key={j.job_id} j={j} onChanged={reload} />
-          ))}
-          {data?.running.map((t) => <RunningThreadRow key={t.id} t={t} onChanged={reload} />)}
-        </View>
+        {listening.length ? <SectionLabel>{count('Ready to listen', listening.length)}</SectionLabel> : null}
+        {listening.map((l) => (
+          <Card key={l.id} tone="needs">
+            <Text style={type.cardTitle} numberOfLines={2}>
+              {l.title}
+            </Text>
+            <Mono numberOfLines={1}>
+              {[data?.byId[l.thread_id]?.title, `${l.n_items} sentences × ${l.n_systems} systems`].filter(Boolean).join(' · ')}
+            </Mono>
+            <Button label="Listen (blind)" kind="primary" style={{ maxWidth: 360 }} onPress={() => router.push(`/listen/${encodeURIComponent(l.id)}`)} />
+          </Card>
+        ))}
 
-        <SectionLabel>Done</SectionLabel>
-        {data && !doneJobs.length ? <EmptyNote>No finished runs since you left.</EmptyNote> : null}
-        <View style={{ gap: 8 }}>
-          {doneJobs.map((j) => (
-            <JobRow key={j.job_id} j={j} onChanged={reload} />
-          ))}
-        </View>
+        {data?.running.length || looseJobs.length ? (
+          <SectionLabel>{count('Working', (data?.running.length ?? 0) + looseJobs.length)}</SectionLabel>
+        ) : null}
+        {data?.running.map((t) => (
+          <RunningThreadRow key={t.id} t={t} jobs={runningJobs.filter((j) => j.thread_id === t.id)} onChanged={reload} />
+        ))}
+        {looseJobs.map((j) => (
+          <JobRow key={j.job_id} j={j} onChanged={reload} />
+        ))}
+
+        {doneJobs.length ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="See finished jobs in Runs"
+            onPress={() => router.push('/runs')}
+            style={({ pressed }) => ({ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: pressed ? 0.7 : 1 })}
+          >
+            <Text style={[type.body, { flex: 1, color: colors.text2 }]}>
+              {`${cap(word(doneJobs.length - failed))} ${doneJobs.length - failed === 1 ? 'job' : 'jobs'} finished`}
+              {failed ? ` · ${word(failed)} failed` : ''}
+            </Text>
+            <Icon name="chevronRight" size={16} color={colors.text3} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+
+        {quiet ? <EmptyNote>All quiet. Nothing needs you and nothing is running.</EmptyNote> : null}
       </ScrollView>
     </View>
   );
@@ -145,11 +183,13 @@ function ApprovalCard({ a, thread }: { a: Approval; thread?: Thread }) {
         </Text>
       </View>
       <Mono numberOfLines={1}>
-        {[thread?.title, a.action_type, `pending since ${hhmm(a.created_at)}`].filter(Boolean).join(' · ')}
+        {[thread?.title, a.decision_summary?.verb ?? a.action_type, `pending since ${hhmm(a.created_at)}`].filter(Boolean).join(' · ')}
       </Mono>
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Button label="Review" kind="primary" style={{ flex: 1 }} onPress={() => router.push(`/approval/${encodeURIComponent(a.id)}`)} />
-        <Button label="Open thread" style={{ flex: 1 }} onPress={() => router.push(`/thread/${encodeURIComponent(a.thread_id)}`)} />
+        <Button label="Review" kind="primary" style={{ flex: 1, maxWidth: 360 }} onPress={() => router.push(`/approval/${encodeURIComponent(a.id)}`)} />
+        {a.thread_id.startsWith('brain:') ? null : (
+          <Button label="Open thread" style={{ flex: 1, maxWidth: 360 }} onPress={() => router.push(`/thread/${encodeURIComponent(a.thread_id)}`)} />
+        )}
       </View>
     </Card>
   );
@@ -165,62 +205,27 @@ function NeedsThreadCard({ t }: { t: Thread }) {
         </Text>
       </View>
       <Mono numberOfLines={1}>{[t.repo_id, t.branch, t.state.replace('_', ' ')].filter(Boolean).join(' · ')}</Mono>
-      <Button label="Open thread" kind="primary" onPress={() => router.push(`/thread/${encodeURIComponent(t.id)}`)} />
+      <Button label="Open thread" kind="primary" style={{ maxWidth: 360 }} onPress={() => router.push(`/thread/${encodeURIComponent(t.id)}`)} />
     </Card>
   );
 }
 
-function jobDot(state: string): string {
-  const s = state.toLowerCase();
-  if (RUNNING_JOB.has(s)) return colors.running;
-  if (/fail|timeout|out_of_memory|cancel/.test(s)) return colors.failed;
-  return colors.waiting;
-}
-
-function JobRow({ j, onChanged }: { j: Job; onChanged: () => void }) {
-  const running = RUNNING_JOB.has(j.state.toLowerCase());
-  const cancel = () =>
-    Alert.alert('Cancel job?', `${j.name} (${j.job_id}) will be cancelled.`, [
-      { text: 'Keep running', style: 'cancel' },
-      {
-        text: 'Cancel job',
-        style: 'destructive',
-        onPress: () => api.cancelJob(j.job_id).then(onChanged, (e) => Alert.alert('Could not cancel', describeError(e))),
-      },
-    ]);
-  return (
-    <View style={rowStyle}>
-      <Dot color={jobDot(j.state)} />
-      <Pressable
-        style={{ flex: 1, minWidth: 0, gap: 2, minHeight: 44, justifyContent: 'center' }}
-        onPress={() => (j.thread_id ? router.push(`/thread/${encodeURIComponent(j.thread_id)}`) : router.push('/runs'))}
-      >
-        <Text style={type.monoBody} numberOfLines={1}>
-          {j.name}
-        </Text>
-        <Mono numberOfLines={1}>
-          {[j.job_id, j.state.toLowerCase(), j.gpus ? `${j.gpus} GPU` : null, j.elapsed && j.time_limit ? `${j.elapsed} / ${j.time_limit}` : j.elapsed]
-            .filter(Boolean)
-            .join(' · ')}
-        </Mono>
-      </Pressable>
-      {running ? <Button label="Cancel" kind="destructive" compact onPress={cancel} /> : null}
-    </View>
-  );
-}
-
-function RunningThreadRow({ t, onChanged }: { t: Thread; onChanged: () => void }) {
+function RunningThreadRow({ t, jobs, onChanged }: { t: Thread; jobs: Job[]; onChanged: () => void }) {
+  const job = jobs[0];
   return (
     <View style={rowStyle}>
       <Dot color={colors.running} />
       <Pressable
+        accessibilityRole="button"
         style={{ flex: 1, minWidth: 0, gap: 2, minHeight: 44, justifyContent: 'center' }}
         onPress={() => router.push(`/thread/${encodeURIComponent(t.id)}`)}
       >
         <Text style={type.rowTitle} numberOfLines={1}>
           {t.title}
         </Text>
-        <Mono numberOfLines={1}>{[providerShort[t.provider], t.repo_id, t.branch].filter(Boolean).join(' · ')}</Mono>
+        <Mono numberOfLines={1}>
+          {job ? `${jobLabel(job)} · ${job.state.toLowerCase()}${jobs.length > 1 ? ` · +${jobs.length - 1} more` : ''}` : [providerShort[t.provider], t.repo_id].filter(Boolean).join(' · ')}
+        </Mono>
       </Pressable>
       <Button
         label="Stop"
@@ -243,4 +248,3 @@ const rowStyle = {
   gap: 12,
   minHeight: 64,
 };
-

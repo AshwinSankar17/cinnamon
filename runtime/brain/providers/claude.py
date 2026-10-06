@@ -17,8 +17,10 @@ import shutil
 import signal
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
+from .. import transcript
 from .base import TurnContext, TurnResult
 
 READ_TOOLS = {"Read", "Glob", "Grep", "LS", "WebFetch", "WebSearch"}
@@ -60,10 +62,44 @@ def _tool_result_text(content: Any) -> str:
 
 class ClaudeProvider:
     name = "claude"
+    supports_defer = True
 
     def __init__(self, binary: str | None = None):
         self.binary = binary or os.environ.get("BRAIN_CLAUDE_BIN") or shutil.which("claude") or "claude"
         self._procs: dict[str, asyncio.subprocess.Process] = {}
+        self._version: str | None = None
+
+    # ---- transcript ------------------------------------------------------------------------------
+    def _session_file(self, ctx: TurnContext, sid: str) -> Path | None:
+        root = Path(ctx.env.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+        return next(root.glob(f"*/{sid}.jsonl"), None)
+
+    def native_items(self, ctx: TurnContext, session_id: str) -> list[dict] | None:
+        f = self._session_file(ctx, session_id)
+        return transcript.read_claude(f)[0] if f else None
+
+    async def _run_quiet(self, ctx: TurnContext, *args: str) -> str:
+        p = await asyncio.create_subprocess_exec(self.binary, *args, cwd=str(ctx.cwd), env={**os.environ, **ctx.env},
+                                                 stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
+                                                 stderr=asyncio.subprocess.PIPE)
+        out, err = await p.communicate()
+        if p.returncode:
+            raise RuntimeError(f"claude {args[0]} failed: {err.decode(errors='replace')[-500:]}")
+        return out.decode(errors="replace")
+
+    async def hydrate(self, ctx: TurnContext, items: list[dict]) -> str:
+        """Append foreign history to this thread's Claude session (seeding one first) so --resume carries it."""
+        sid = ctx.resume_session
+        if not sid or not self._session_file(ctx, sid):
+            # ponytail: a one-line seed turn costs a tiny request; writing a session from scratch is unverified
+            sid = json.loads(await self._run_quiet(ctx, "-p", "Reply with exactly: ready", "--output-format", "json"))["session_id"]
+        if self._version is None:
+            self._version = (await self._run_quiet(ctx, "--version")).split()[0]
+        f = self._session_file(ctx, sid)
+        if not f:
+            raise RuntimeError(f"Claude session {sid} has no transcript file")
+        transcript.write_claude(f, items, self._version)
+        return sid
 
     async def interrupt(self, thread_id: str) -> None:
         p = self._procs.get(thread_id)

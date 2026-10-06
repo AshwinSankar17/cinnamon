@@ -5,9 +5,10 @@ import { router } from 'expo-router';
 import { api, describeError } from '@/src/api';
 import { duration, kTokens, toMs } from '@/src/format';
 import { colors, fonts, providerName, type } from '@/src/theme';
-import { parseUnifiedDiff, type Block, type JobInfo, type Step, type Turn } from '@/src/turns';
+import { parseUnifiedDiff, stepCommand, stepLabel, type Block, type JobInfo, type Step, type Turn } from '@/src/turns';
 import type { FileDiff } from '@/src/types';
 import { Icon } from './Icon';
+import { Markdown } from './Markdown';
 import { Badge, Dot, IconButton, Mono, ProviderPill } from './ui';
 
 // ---------------------------------------------------------------------------------------------
@@ -16,30 +17,15 @@ export function UserBubble({ text }: { text: string }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
       <View style={{ maxWidth: '82%', backgroundColor: colors.surface2, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14 }}>
-        <Text style={type.body} selectable>
-          {text}
-        </Text>
+        <Markdown text={text} />
       </View>
     </View>
   );
 }
 
-/** Prose with `inline code` spans. */
+/** Assistant prose: rendered Markdown. */
 export function Prose({ text }: { text: string }) {
-  const parts = text.split(/(`[^`\n]+`)/g);
-  return (
-    <Text style={type.bodyChat} selectable>
-      {parts.map((p, i) =>
-        p.startsWith('`') && p.endsWith('`') && p.length > 2 ? (
-          <Text key={i} style={{ fontFamily: fonts.mono, fontSize: 13, backgroundColor: colors.surface2 }}>
-            {p.slice(1, -1)}
-          </Text>
-        ) : (
-          <Text key={i}>{p}</Text>
-        ),
-      )}
-    </Text>
-  );
+  return <Markdown text={text} />;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -110,20 +96,38 @@ export function TurnView({ turn, now, onFork }: { turn: Turn; now: number; onFor
 }
 
 function StepRow({ s }: { s: Step }) {
+  const [open, setOpen] = useState(false);
+  const hasOutput = !!(s.output && s.output.trim()) && s.ok !== false; // failures already have their own card
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 }}>
-      {!s.done ? (
-        <View style={{ width: 14, alignItems: 'center' }}>
-          <Dot color={colors.accent} />
-        </View>
-      ) : (
-        <Icon name={s.ok === false ? 'cross' : 'check'} size={14} color={s.ok === false ? colors.failed : colors.running} strokeWidth={2.25} />
-      )}
-      <Text style={{ fontFamily: s.done ? fonts.sans : fonts.sansSemi, fontSize: 13, lineHeight: 18, color: s.done ? colors.text2 : colors.text, flexShrink: 1 }} numberOfLines={2}>
-        {s.summary}
-      </Text>
-      {s.exitCode !== undefined && s.exitCode !== null && s.exitCode !== 0 ? (
-        <Mono style={{ color: colors.failed }}>exit {s.exitCode}</Mono>
+    <View>
+      <Pressable
+        accessibilityRole={hasOutput ? 'button' : undefined}
+        accessibilityState={hasOutput ? { expanded: open } : undefined}
+        disabled={!hasOutput}
+        onPress={() => setOpen(!open)}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 }}
+      >
+        {!s.done ? (
+          <View style={{ width: 14, alignItems: 'center' }}>
+            <Dot color={colors.accent} />
+          </View>
+        ) : (
+          <Icon name={s.ok === false ? 'cross' : 'check'} size={14} color={s.ok === false ? colors.failed : colors.running} strokeWidth={2.25} />
+        )}
+        <Text style={{ fontFamily: s.done ? fonts.sans : fonts.sansSemi, fontSize: 13, lineHeight: 18, color: s.done ? colors.text2 : colors.text, flexShrink: 1 }} numberOfLines={open ? undefined : 2}>
+          {stepLabel(s)}
+        </Text>
+        {s.exitCode !== undefined && s.exitCode !== null && s.exitCode !== 0 ? (
+          <Mono style={{ color: colors.failed }}>exit {s.exitCode}</Mono>
+        ) : null}
+        {hasOutput ? <Icon name={open ? 'chevronUp' : 'chevronDown'} size={12} color={colors.text3} strokeWidth={2} /> : null}
+      </Pressable>
+      {open ? (
+        <ScrollView horizontal style={{ backgroundColor: colors.terminalBg, borderRadius: 8, marginVertical: 4 }}>
+          <Text selectable style={{ fontFamily: fonts.mono, fontSize: 12, lineHeight: 18, color: colors.terminalFg, paddingHorizontal: 10, paddingVertical: 8 }}>
+            {s.output}
+          </Text>
+        </ScrollView>
       ) : null}
     </View>
   );
@@ -132,7 +136,7 @@ function StepRow({ s }: { s: Step }) {
 function TurnFooter({ turn, onFork }: { turn: Turn; onFork: (seq: number) => void }) {
   const p = turn.ended!.payload;
   const parts = [
-    p.diffstat?.files ? `${p.diffstat.files} files` : null,
+    p.diffstat?.files ? `${p.diffstat.files} ${p.diffstat.files === 1 ? 'file' : 'files'}` : null,
     p.usage ? `${kTokens(p.usage.input_tokens)} in · ${kTokens(p.usage.output_tokens)} out` : null,
     p.stop_reason && p.stop_reason !== 'end_turn' ? p.stop_reason.replace('_', ' ') : null,
   ].filter(Boolean);
@@ -161,7 +165,31 @@ export function BlockView({ b }: { b: Block }) {
       return <ApprovalInline b={b} />;
     case 'notice':
       return <NoticeRow text={b.text} tone={b.tone} />;
+    case 'listen':
+      return <ListenCard b={b} />;
   }
+}
+
+function ListenCard({ b }: { b: Extract<Block, { kind: 'listen' }> }) {
+  return (
+    <View style={{ borderWidth: 1, borderColor: colors.hairline, borderRadius: 14, padding: 12, gap: 6, backgroundColor: colors.surface }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Icon name="play" size={16} color={colors.accent} />
+        <Text style={[type.cardTitle, { flex: 1 }]} numberOfLines={2}>
+          {b.title}
+        </Text>
+      </View>
+      <Mono>{b.summary ? 'rated · results sent to the agent' : `${b.detail} · waiting for your ears`}</Mono>
+      {b.summary ? <Text style={[type.small, { color: colors.text }]}>{b.summary}</Text> : null}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push(`/listen/${encodeURIComponent(b.listenId)}`)}
+        style={({ pressed }) => ({ height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: b.summary ? colors.surface2 : colors.accent, opacity: pressed ? 0.85 : 1 })}
+      >
+        <Text style={{ fontFamily: fonts.sansSemi, fontSize: 14, color: b.summary ? colors.text : colors.onAccent }}>{b.summary ? 'See results' : 'Listen (blind)'}</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 const DIFF_PREVIEW = 40;
@@ -266,7 +294,7 @@ function TerminalCard({ step }: { step: Step }) {
   const [full, setFull] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const label = step.input || step.summary;
+  const label = stepCommand(step) ?? stepLabel(step);
   const badge =
     step.ok === false ? <Badge label={step.exitCode !== undefined && step.exitCode !== null ? `exit ${step.exitCode}` : 'failed'} tone="fail" /> : <Badge label="ok" tone="ok" />;
   const loadFull = async () => {

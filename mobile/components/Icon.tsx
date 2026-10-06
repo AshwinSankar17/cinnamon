@@ -26,7 +26,8 @@ export type IconName =
   | 'mute'
   | 'archive'
   | 'scan'
-  | 'refresh';
+  | 'refresh'
+  | 'attach';
 
 type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
 
@@ -103,6 +104,8 @@ export function Icon({ name, size = 20, color = colors.text, strokeWidth = 1.75 
         return <Rect x="5" y="5" width="14" height="14" rx="2" fill={color} />;
       case 'send':
         return <Path d="M12 19V5M6 11l6-6 6 6" {...stroke} />;
+      case 'attach':
+        return <Path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" {...stroke} />;
       case 'fork':
         return (
           <>

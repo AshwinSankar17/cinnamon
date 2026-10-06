@@ -84,6 +84,31 @@ CREATE TABLE IF NOT EXISTS provider_sessions (
   PRIMARY KEY (thread_id, provider)
 );
 
+-- Lossless provider-neutral transcript (brain/transcript.py item dicts); what a switched-to provider is hydrated from.
+CREATE TABLE IF NOT EXISTS transcript_items (
+  thread_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  provider TEXT NOT NULL,
+  turn_id TEXT,
+  kind TEXT NOT NULL,
+  data TEXT NOT NULL,
+  ts REAL NOT NULL,
+  PRIMARY KEY (thread_id, idx)
+);
+
+CREATE TABLE IF NOT EXISTS listening_tests (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  path TEXT NOT NULL,
+  title TEXT NOT NULL,
+  n_items INTEGER NOT NULL,
+  n_systems INTEGER NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending',
+  summary TEXT,
+  created_at REAL NOT NULL,
+  rated_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS approvals (
   id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,
@@ -175,6 +200,18 @@ CREATE TABLE IF NOT EXISTS ledger (
 """
 
 
+# Additive column migrations for databases created by earlier versions: (table, column, declaration).
+MIGRATIONS = [
+    ("provider_sessions", "native_seen", "INTEGER NOT NULL DEFAULT 0"),   # non-user items read from the native session
+    ("provider_sessions", "canon_synced", "INTEGER NOT NULL DEFAULT 0"),  # transcript items the native session holds
+    ("approvals", "raw_input", "TEXT"),                                   # the tool input, for providers that need a rule
+    ("threads", "vault_dir", "TEXT"),                                     # a training run's own vault folder
+    ("devices", "web_push", "TEXT"),                                      # PWA Web Push subscription (JSON)
+    ("devices", "approved", "INTEGER NOT NULL DEFAULT 1"),                # 0 = paired but waiting for an existing device
+    ("jobs", "label", "TEXT"),                                            # what the job is, e.g. its script name
+]
+
+
 class LeaseHeld(RuntimeError):
     pass
 
@@ -242,6 +279,9 @@ def connect(path: Path | str, exclusive: bool = True) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
+    for table, col, decl in MIGRATIONS:
+        if col not in {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
     if str(path) != ":memory:":
         try:
             os.chmod(path, 0o600)

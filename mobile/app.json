@@ -27,8 +27,12 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "single",
+      "favicon": "./assets/images/favicon.png",
+      "name": "Cluster Brain",
+      "shortName": "Brain",
+      "themeColor": "#faf8f4",
+      "backgroundColor": "#faf8f4"
     },
     "plugins": [
       "expo-router",

@@ -1,42 +1,43 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { ClusterChip, ConnectionBanner } from '@/components/ConnectionBanner';
+import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { Icon } from '@/components/Icon';
+import { plainText } from '@/components/Markdown';
 import { ThreadActionsSheet } from '@/components/ThreadActionsSheet';
 import { Chip, Dot, EmptyNote, IconButton, ListCard, Mono, ProviderPill, SectionLabel, TabHeader } from '@/components/ui';
 import { api } from '@/src/api';
 import { ago } from '@/src/format';
 import { useRemote } from '@/src/hooks';
 import { getThreads, upsertThreads } from '@/src/store';
-import { colors, fonts, providerShort, stateColor, stateLabel, type, type ThreadState } from '@/src/theme';
+import { colors, fonts, stateColor, stateLabel, type } from '@/src/theme';
 import type { BrainEvent, Thread } from '@/src/types';
 
-const STATES: ThreadState[] = ['needs_you', 'running', 'waiting', 'idle', 'paused'];
-const PROVIDERS = ['claude', 'codex', 'gemini'] as const;
 
-async function loadThreads(): Promise<{ threads: Thread[]; stale: boolean }> {
+async function loadThreads(archived: boolean): Promise<{ threads: Thread[]; stale: boolean }> {
   try {
-    const remote = await api.threads({ archived: 0 });
+    const remote = await api.threads({ archived: archived ? 1 : 0 });
     await upsertThreads(remote);
     return { threads: remote, stale: false };
   } catch (e) {
-    const local = await getThreads(false);
+    const local = (await getThreads(true)).filter((t) => !!t.archived === archived);
     if (local.length) return { threads: local, stale: true };
     throw e;
   }
 }
+
+type Filter = 'all' | 'needs_you' | 'running';
 
 function lastEventLine(t: Thread): string {
   const e = t.last_event as BrainEvent | null | undefined;
   if (e) {
     switch (e.type) {
       case 'turn.ended':
-        return e.payload.text || `turn ended · ${e.payload.stop_reason ?? ''}`;
+        return plainText(e.payload.text ?? '') || (e.payload.stop_reason === 'tool_deferred' ? 'Waiting for your approval' : 'Turn finished');
       case 'assistant.text':
-        return e.payload.text;
+        return plainText(e.payload.text);
       case 'user.message':
-        return `you: ${e.payload.text}`;
+        return `you: ${plainText(e.payload.text)}`;
       case 'tool.started':
         return e.payload.summary;
       case 'job.state':
@@ -46,7 +47,7 @@ function lastEventLine(t: Thread): string {
       case 'provider.status':
         return `${e.payload.status.replace('_', ' ')} · ${e.payload.message ?? ''}`;
       case 'system.notice':
-        return e.payload.text;
+        return /^Thread created on /.test(e.payload.text) ? 'No messages yet' : e.payload.text;
       default:
         break;
     }
@@ -55,10 +56,14 @@ function lastEventLine(t: Thread): string {
 }
 
 export default function ThreadsScreen() {
-  const { data, error, loading, reload, setData } = useRemote(loadThreads, { pollMs: 30_000 });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data, error, loading, reload, setData } = useRemote(() => loadThreads(showArchived), { pollMs: 30_000 });
+  useEffect(() => {
+    reload();
+  }, [showArchived, reload]);
+  const archivedCount = useRemote(() => api.threads({ archived: 1 }).then((x) => x.length), { pollMs: 120_000 }).data ?? 0;
   const [q, setQ] = useState('');
-  const [stateFilter, setStateFilter] = useState<ThreadState | null>(null);
-  const [provFilter, setProvFilter] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [sheet, setSheet] = useState<Thread | null>(null);
 
@@ -72,15 +77,14 @@ export default function ThreadsScreen() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return threads
-      .filter((t) => !t.archived)
-      .filter((t) => !stateFilter || t.state === stateFilter)
-      .filter((t) => !provFilter || t.provider === provFilter)
+      .filter((t) => !!t.archived === showArchived)
+      .filter((t) => filter === 'all' || t.state === filter)
       .filter(
         (t) =>
           !needle ||
           [t.title, t.repo_id, t.branch ?? '', lastEventLine(t)].some((s) => s.toLowerCase().includes(needle)),
       );
-  }, [threads, q, stateFilter, provFilter]);
+  }, [threads, q, filter, showArchived]);
 
   const pinned = filtered.filter((t) => t.pinned);
   const groups = useMemo(() => {
@@ -100,7 +104,12 @@ export default function ThreadsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>
-      <TabHeader title="Threads" right={<ClusterChip />} />
+      <TabHeader
+        title="Threads"
+        right={
+          <IconButton name="plus" label="Start a thread, run or idea" bordered onPress={() => router.push('/new')} />
+        }
+      />
       <ConnectionBanner />
       <ScrollView
         keyboardShouldPersistTaps="handled"
@@ -134,27 +143,17 @@ export default function ThreadsScreen() {
           />
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
-          <Chip label="All" selected={!stateFilter} onPress={() => setStateFilter(null)} />
-          {STATES.map((s) => (
+        <View style={{ flexDirection: 'row', gap: 6, paddingVertical: 4 }}>
+          {(['all', 'needs_you', 'running'] as Filter[]).map((f) => (
             <Chip
-              key={s}
-              label={`${stateLabel[s]} (${counts[s] ?? 0})`}
-              dot={stateColor[s]}
-              selected={stateFilter === s}
-              onPress={() => setStateFilter(stateFilter === s ? null : s)}
+              key={f}
+              label={f === 'all' ? 'All' : `${stateLabel[f]}${counts[f] ? ` (${counts[f]})` : ''}`}
+              dot={f === 'all' ? undefined : stateColor[f]}
+              selected={filter === f}
+              onPress={() => setFilter(f)}
             />
           ))}
-          {PROVIDERS.map((p) => (
-            <Chip
-              key={p}
-              label={providerShort[p]}
-              mono
-              selected={provFilter === p}
-              onPress={() => setProvFilter(provFilter === p ? null : p)}
-            />
-          ))}
-        </ScrollView>
+        </View>
 
         {data?.stale ? (
           <View style={{ minHeight: 44, borderRadius: 10, backgroundColor: colors.surface2, paddingHorizontal: 12, justifyContent: 'center' }}>
@@ -162,7 +161,14 @@ export default function ThreadsScreen() {
           </View>
         ) : null}
         {error && !data ? <EmptyNote>{error}</EmptyNote> : null}
-        {data && !filtered.length ? <EmptyNote>No threads match.</EmptyNote> : null}
+        {showArchived ? (
+          <Pressable accessibilityRole="button" onPress={() => setShowArchived(false)} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={[type.label, { color: colors.accent }]}>‹ Back to active threads</Text>
+          </Pressable>
+        ) : null}
+        {data && !filtered.length ? (
+          <EmptyNote>{q || filter !== 'all' ? 'No threads match.' : showArchived ? 'Nothing archived.' : 'No threads yet. Tap + to start one.'}</EmptyNote>
+        ) : null}
 
         {pinned.length ? (
           <View style={{ gap: 6 }}>
@@ -175,7 +181,15 @@ export default function ThreadsScreen() {
           </View>
         ) : null}
 
-        {groups.map(([repo, list]) => {
+        {groups.length === 1 ? (
+          // one repo: no header, just the list
+          <ListCard>
+            {groups[0][1].map((t, i) => (
+              <ThreadRow key={t.id} t={t} first={i === 0} onActions={() => setSheet(t)} />
+            ))}
+          </ListCard>
+        ) : null}
+        {groups.length > 1 && groups.map(([repo, list]) => {
           const isCollapsed = !!collapsed[repo];
           return (
             <ListCard key={repo}>
@@ -193,6 +207,17 @@ export default function ThreadsScreen() {
             </ListCard>
           );
         })}
+        {!showArchived && archivedCount ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowArchived(true)}
+            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 }}
+          >
+            <Icon name="archive" size={16} color={colors.text3} />
+            <Text style={[type.small, { flex: 1 }]}>Archived · {archivedCount}</Text>
+            <Icon name="chevronRight" size={14} color={colors.text3} strokeWidth={2} />
+          </Pressable>
+        ) : null}
       </ScrollView>
       <ThreadActionsSheet thread={sheet} onClose={() => setSheet(null)} onChanged={onChanged} />
     </View>
@@ -212,7 +237,9 @@ function ThreadRow({ t, first, showPin, onActions }: { t: Thread; first?: boolea
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityHint="Long-press for thread actions"
+        accessibilityHint="Long-press for pin, mute, model, archive"
+        accessibilityActions={[{ name: 'longpress', label: 'Thread actions' }]}
+        onAccessibilityAction={(e) => e.nativeEvent.actionName === 'longpress' && onActions()}
         onPress={() => router.push(`/thread/${encodeURIComponent(t.id)}`)}
         onLongPress={onActions}
         style={({ pressed }) => ({
@@ -221,8 +248,8 @@ function ThreadRow({ t, first, showPin, onActions }: { t: Thread; first?: boolea
           flexDirection: 'row',
           alignItems: 'flex-start',
           gap: 10,
-          paddingVertical: 7,
-          paddingLeft: 14,
+          paddingVertical: 9,
+          paddingHorizontal: 14,
           opacity: pressed ? 0.8 : 1,
         })}
       >
@@ -239,12 +266,11 @@ function ThreadRow({ t, first, showPin, onActions }: { t: Thread; first?: boolea
             <ProviderPill provider={t.provider} />
             <Mono style={{ color: colors.text3 }}>{ago(t.updated_at)}</Mono>
           </View>
-          <Mono numberOfLines={1} style={{ color: colors.text3 }}>
+          <Text numberOfLines={1} style={[type.small, { color: colors.text2 }]}>
             {lastEventLine(t)}
-          </Mono>
+          </Text>
         </View>
       </Pressable>
-      <IconButton name="dots" label="Thread actions" color={colors.text2} onPress={onActions} />
     </View>
   );
 }

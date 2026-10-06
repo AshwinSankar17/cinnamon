@@ -52,6 +52,10 @@ class AuthError(Exception):
     pass
 
 
+class PendingApproval(AuthError):
+    """A paired device that an existing device has not approved yet."""
+
+
 class Identity:
     def __init__(self, key_path: Path, token_secret_path: Path):
         self.key_path = key_path
@@ -117,15 +121,18 @@ class Pairing:
         self.db = db
         self.ident = ident
 
-    def create(self, endpoint: str) -> dict:
+    def create(self, endpoint: str, alternates: list[str] | None = None) -> dict:
         code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(8))
         code = f"{code[:4]}-{code[4:]}"
         secret = secrets.token_bytes(32)
         exp = int(time.time()) + PAIR_TTL
         self.db.x("INSERT INTO pairings(code, secret, endpoint, expires_at) VALUES (?,?,?,?)",
                   (code, b64e(secret), endpoint, exp))
-        return {"v": 1, "brain_pub": self.ident.pub_b64, "endpoint": endpoint, "code": code,
-                "secret": b64e(secret), "exp": exp}
+        out = {"v": 1, "brain_pub": self.ident.pub_b64, "endpoint": endpoint, "code": code,
+               "secret": b64e(secret), "exp": exp}
+        if alternates:
+            out["alt"] = alternates  # failover relays; the app also refreshes them via GET /v1/endpoints
+        return out
 
     @staticmethod
     def transcript(brain_pub: bytes, device_pub: bytes, endpoint: str, nonce_device: bytes) -> bytes:
@@ -147,19 +154,24 @@ class Pairing:
             raise AuthError("pairing proof failed")
         device_id = f"dev_{uuid.uuid4().hex[:12]}"
         self.db.x("UPDATE pairings SET used=1 WHERE code=?", (code,))
-        self.db.x("INSERT INTO devices(id, name, public_key, created_at, last_seen) VALUES (?,?,?,?,?)",
-                  (device_id, device_name[:64], device_pub_b64, time.time(), time.time()))
-        return {"device_id": device_id, "brain_sig": self.ident.sign(t)}
+        # The first device is trusted on pairing (it needed the code from your terminal). Every later one waits until
+        # an already-paired device approves it, so a leaked pairing code alone never yields a working device.
+        first = not self.db.one("SELECT 1 FROM devices WHERE revoked=0 AND approved=1")
+        self.db.x("INSERT INTO devices(id, name, public_key, created_at, last_seen, approved) VALUES (?,?,?,?,?,?)",
+                  (device_id, device_name[:64], device_pub_b64, time.time(), time.time(), 1 if first else 0))
+        return {"device_id": device_id, "brain_sig": self.ident.sign(t), "pending_approval": not first}
 
     # ---- sessions -------------------------------------------------------------------------------
-    def _device(self, device_id: str):
+    def _device(self, device_id: str, approved: bool = True):
         d = self.db.one("SELECT * FROM devices WHERE id=?", (device_id,))
         if not d or d["revoked"]:
             raise AuthError("unknown or revoked device")
+        if approved and not d["approved"]:
+            raise PendingApproval("this device is waiting for approval on your paired phone (or `brain devices approve`)")
         return d
 
     def challenge(self, device_id: str, host: str) -> dict:
-        self._device(device_id)
+        self._device(device_id, approved=False)  # the token step enforces approval, with a clear message
         nonce = secrets.token_bytes(32)
         self.db.x("INSERT INTO challenges(nonce, device_id, expires_at) VALUES (?,?,?)",
                   (b64e(nonce), device_id, time.time() + CHALLENGE_TTL))
@@ -205,3 +217,6 @@ class Pairing:
     def revoke(self, device_id: str) -> None:
         self.db.x("UPDATE devices SET revoked=1 WHERE id=?", (device_id,))
         self.db.x("DELETE FROM refresh_tokens WHERE device_id=?", (device_id,))
+        # a device revoked while waiting for approval: close its "new device" card everywhere
+        self.db.x("UPDATE approvals SET state='denied', note='revoked', decided_at=? WHERE action_type='pair_device'"
+                  " AND state='pending' AND tool_input=?", (time.time(), device_id))

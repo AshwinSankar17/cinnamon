@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import asyncio
 import json
 import logging
@@ -50,6 +51,13 @@ def cmd_init(a: argparse.Namespace) -> int:
     s = Settings.load(p)
     if a.endpoint:
         s.endpoint = a.endpoint
+    if a.alt_endpoint:
+        s.raw["alt_endpoints"] = a.alt_endpoint
+    for key in ("projects_root", "vault_root"):  # where phone-created projects and their vaults go
+        v = getattr(a, key)
+        if v:
+            s.raw[key] = str(Path(v).expanduser().resolve())
+            Path(s.raw[key]).mkdir(parents=True, exist_ok=True)
     known = {r.path for r in s.repos}
     for root in a.repos or []:
         rp = Path(root).expanduser().resolve()
@@ -80,12 +88,12 @@ def cmd_init(a: argparse.Namespace) -> int:
 
 
 def _internal(path: str, body: dict) -> tuple[int, object]:
-    """Call the running Brain over its Unix socket (only the owner can read the hook token)."""
+    """Owner-only admin calls to the running Brain over its Unix socket (admin token; agents only get the hook token)."""
     from .hook import _UnixHTTPConnection
     p = paths()
     conn = _UnixHTTPConnection(str(p.sock), timeout=20)
     conn.request("POST", path, body=json.dumps(body),
-                 headers={"Content-Type": "application/json", "X-Brain-Hook-Token": p.hook_token.read_text().strip()})
+                 headers={"Content-Type": "application/json", "X-Brain-Admin-Token": p.admin_token.read_text().strip()})
     r = conn.getresponse()
     return r.status, json.loads(r.read() or b"null")
 
@@ -115,7 +123,7 @@ def cmd_pair(a: argparse.Namespace) -> int:
         from .identity import Identity, Pairing
         db, ls = _open(p)
         ident = Identity(p.identity_key, p.token_secret)
-        payload = Pairing(db, ident).create(endpoint)
+        payload = Pairing(db, ident).create(endpoint, [e for e in s.raw.get("alt_endpoints", []) if e != endpoint])
         fp = ident.fingerprint()
         ls.release()
     text = json.dumps(payload, separators=(",", ":"))
@@ -148,10 +156,17 @@ def cmd_serve(a: argparse.Namespace) -> int:
     if p.sock.exists():
         p.sock.unlink()
 
+    class Server(uvicorn.Server):
+        # uvicorn re-raises SIGTERM/SIGINT after its graceful shutdown, which kills the process before the lease is
+        # released (the next start then waits out a stale lease). Brain handles the signals itself, below.
+        @contextlib.contextmanager
+        def capture_signals(self):
+            yield
+
     async def main() -> None:
-        servers = [uvicorn.Server(uvicorn.Config(app, uds=str(p.sock), log_level="info"))]
+        servers = [Server(uvicorn.Config(app, uds=str(p.sock), log_level="info"))]
         if a.port:
-            servers.append(uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=a.port, log_level="info")))
+            servers.append(Server(uvicorn.Config(app, host="127.0.0.1", port=a.port, log_level="info")))
         sched = asyncio.create_task(brain.run_scheduler(a.tick))
         deadline = time.time() + a.max_hours * 3600 if a.max_hours else None
 
@@ -166,7 +181,7 @@ def cmd_serve(a: argparse.Namespace) -> int:
 
         wd = asyncio.create_task(watchdog())
         loop = asyncio.get_running_loop()
-        for sig in (signal.SIGUSR1,):  # SLURM --signal=B:USR1@600 hand-over
+        for sig in (signal.SIGUSR1, signal.SIGTERM, signal.SIGINT):  # USR1: SLURM --signal=B:USR1@600 hand-over
             try:
                 loop.add_signal_handler(sig, lambda: [setattr(s, "should_exit", True) for s in servers])
             except (NotImplementedError, RuntimeError):
@@ -207,34 +222,63 @@ def cmd_submit(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_listen(a: argparse.Namespace) -> int:
+    """Used by agents inside a thread: `brain listen evals/step10k/listen.json` asks the owner for a blind listening test."""
+    from .hook import _UnixHTTPConnection
+    sock = os.environ.get("BRAIN_HOOK_SOCK") or str(paths().sock)
+    token = os.environ.get("BRAIN_HOOK_TOKEN") or paths().hook_token.read_text().strip()
+    thread = os.environ.get("BRAIN_THREAD_ID") or a.thread
+    if not thread:
+        print("BRAIN_THREAD_ID is not set (run this from a Brain thread, or pass --thread)")
+        return 2
+    conn = _UnixHTTPConnection(sock, timeout=60)
+    conn.request("POST", "/internal/listen", body=json.dumps({"thread_id": thread, "path": str(Path(a.manifest).resolve())}),
+                 headers={"Content-Type": "application/json", "X-Brain-Hook-Token": token})
+    r = conn.getresponse()
+    data = json.loads(r.read() or b"{}")
+    if r.status != 200:
+        print(f"listen.json rejected: {data.get('error', data)}")
+        return 1
+    print(f"Listening test \"{data['title']}\" sent to the owner's phone ({data['items']} sentences × {data['systems']} "
+          f"systems). End your turn now; Brain will wake this thread with the ratings.")
+    return 0
+
+
 def cmd_devices(a: argparse.Namespace) -> int:
-    body = {"revoke": a.device_id} if a.action == "revoke" else {}
+    body = {a.action: a.device_id} if a.action in ("revoke", "approve") else {}
     if _brain_running():
         code, rows = _internal("/internal/devices", body)
     else:
         p = paths()
         db, ls = _open(p)
         try:
-            if body:
+            if body.get("revoke"):
                 from .identity import Identity, Pairing
                 Pairing(db, Identity(p.identity_key, p.token_secret)).revoke(a.device_id)
+            if body.get("approve"):
+                db.x("UPDATE devices SET approved=1 WHERE id=? AND revoked=0", (a.device_id,))
+                db.x("UPDATE approvals SET state='allowed', device_id='cli', decided_at=? WHERE action_type='pair_device'"
+                     " AND state='pending' AND tool_input=?", (time.time(), a.device_id))
             rows = [dict(r) for r in db.q("SELECT * FROM devices ORDER BY created_at")]
         finally:
             ls.release()
     for r in rows:
         seen = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["last_seen"])) if r.get("last_seen") else "-"
-        print(f"{r['id']}  {r['name']:<20} last seen {seen}  {'REVOKED' if r['revoked'] else ''}")
+        status = "REVOKED" if r["revoked"] else ("" if r.get("approved", True) else "WAITING FOR APPROVAL")
+        print(f"{r['id']}  {r['name']:<20} last seen {seen}  {status}")
     return 0
 
 
 def cmd_endpoint(a: argparse.Namespace) -> int:
+    primary, alternates = a.url, a.alt or []
     if _brain_running():
-        code, res = _internal("/internal/endpoint", {"endpoint": a.url})
+        code, res = _internal("/internal/endpoint", {"endpoint": primary, "alternates": alternates})
         print(f"endpoint set; signed push sent to {res['pushed_to']} device(s)" if code == 200 else f"failed: {res}")
         return 0 if code == 200 else 1
     p = paths()
     s = Settings.load(p)
-    s.endpoint = a.url
+    s.endpoint = primary
+    s.raw["alt_endpoints"] = [x for x in alternates if x != primary]
     s.save(p)
     print("endpoint saved (Brain not running, so no push sent)")
     return 0
@@ -278,6 +322,8 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--worktree-root", help="where thread worktrees go (default: <repo parent>/.brain-worktrees)")
     i.add_argument("--vault-root", help="experiment vault root (shared filesystem)")
     i.add_argument("--endpoint", help="public endpoint the phone will use (relay URL)")
+    i.add_argument("--alt-endpoint", nargs="*", help="failover relay URLs the phone tries when the primary is down")
+    i.add_argument("--projects-root", help="where new projects started from the phone are created")
     i.add_argument("--fcm-key", help="path to a Firebase service-account JSON (FCM Admin role only)")
     i.add_argument("--external-host", action="store_true", help="this machine is an always-on host (rung A)")
     i.set_defaults(fn=cmd_init)
@@ -298,14 +344,20 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--thread")
     sb.set_defaults(fn=cmd_submit)
 
-    d = sub.add_parser("devices", help="list or revoke paired devices")
-    d.add_argument("action", nargs="?", choices=["list", "revoke"], default="list")
+    ls = sub.add_parser("listen", help="(for agents) ask the owner for a blind listening test of a listen.json")
+    ls.add_argument("manifest")
+    ls.add_argument("--thread")
+    ls.set_defaults(fn=cmd_listen)
+
+    d = sub.add_parser("devices", help="list, approve or revoke paired devices")
+    d.add_argument("action", nargs="?", choices=["list", "approve", "revoke"], default="list")
     d.add_argument("device_id", nargs="?")
     d.set_defaults(fn=cmd_devices)
 
     ep = sub.add_parser("endpoint", help="record a new relay URL and push it (signed) to paired phones")
     ep.add_argument("action", choices=["set"])
     ep.add_argument("url")
+    ep.add_argument("--alt", nargs="*", help="failover relay URLs (replaces the current list)")
     ep.set_defaults(fn=cmd_endpoint)
 
     sub.add_parser("doctor", help="check permissions, lease, configuration").set_defaults(fn=cmd_doctor)

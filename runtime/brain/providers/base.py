@@ -20,6 +20,7 @@ class TurnContext:
     pretool: PreTool  # same decision path the Claude command hook uses (used by in-process providers)
     system_append: str = ""
     permission_mode: str = "auto"
+    readonly: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -34,6 +35,14 @@ class TurnResult:
 
 
 class Provider(Protocol):
+    """Required: name, run_turn, interrupt. Optional (looked up with getattr by Brain):
+
+    supports_defer: bool             False -> a pending approval is a deny; Brain resumes with a prompt once decided
+    native_items(ctx, session_id)    -> list of transcript items read from the native session (brain/transcript.py)
+    hydrate(ctx, items)              -> session_id after appending items to ctx.resume_session (seeding one if None);
+                                        absent -> Brain replays missing history verbatim in the next prompt
+    on_approved(ctx, tool_name, tool_input)  called before resuming an approved call (e.g. add a permission rule)
+    """
     name: str
 
     async def run_turn(self, ctx: TurnContext) -> TurnResult: ...

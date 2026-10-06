@@ -20,6 +20,12 @@ cluster-brain/
 | Event spine | Per-thread sequence numbers, hash chain, 8 KB inline cap with blobs, replay from a cursor, WebSocket fan-out, full-text search |
 | Threads | Read-only or worktree (`brain/<id>-<slug>`); pin, mute and archive; fork; snapshots before and after every turn (`refs/brain/…`) with per-file diffs |
 | Claude Code | `claude -p` stream-json adapter. Every tool call goes through `brain-hook` (PreToolUse): auto mode by default, a small always-ask set is deferred, host-conduct rules are denied |
+| Codex, Antigravity | `codex exec --json` and `agy -p` stream-json adapters behind the same `brain-hook`. Neither CLI can defer, so a pending approval is a deny and Brain resumes with a prompt once you decide. agy runs on `settings.json` allow rules by default (`agy_permissions: rules`) or `--dangerously-skip-permissions` with the hook as the only gate (`agy_permissions: skip`) |
+| Start from the phone | **+** on Threads (or tap a repo): a thread on an existing repo, a **training run** (its own worktree + vault folder `<vault>/<run>-<id>`, where its jobs write), or a **new idea** (Brain creates a repo under `--projects-root` with a vault under `--vault-root` and starts on the idea). Switch model from a thread's ⋯ menu |
+| PWA | `cd mobile && npx expo export --platform web --output-dir dist`; Brain serves it on the relay URL. Pair in Chrome, Add to Home Screen. Push is standard Web Push (VAPID key in `~/.brain/vapid.pem`), no Firebase needed |
+| Relay failover | Give Brain several relays (`--alt-endpoint`, or `brain endpoint set URL --alt URL2`); the app fails over to whichever answers and keeps the list current |
+| Scope | Agents change files only in their thread's worktree, the repo's vault and temp dirs; anything else (incl. user-wide config) becomes an approval pushed to your phone. Codex is OS-sandboxed to that scope; Claude and agy rely on Brain's command policy (no usable sandbox here: no `bwrap`, agy's `--sandbox` does not match the scope) |
+| Provider handoff | Brain keeps a lossless provider-neutral transcript of every thread. `POST /v1/threads/{id}/provider` switches provider; the next turn first gives the new one everything it has not seen — appended to its native session for Claude and Codex, replayed verbatim for agy. Hidden reasoning does not carry over |
 | Approvals | Pending until you decide, never auto-denied. Device-signed decisions. Resume via `--resume` with no prompt |
 | SLURM | `brain submit` from inside a turn; jobs named and commented for `sacct`; completion-file plus batched-squeue watcher; the agent is woken when the job ends |
 | Pairing and auth | QR pins Brain's Ed25519 key; code + HMAC + device signature; 15-minute access and 7-day rotating refresh tokens; revocation |
@@ -27,7 +33,7 @@ cluster-brain/
 | Safety | Secret registry with exact-value redaction; permission checks; incident-response log; DISABLED flags; Pause |
 | Tests | 16 unit and flow tests, plus `runtime/tests/smoke_live.py` (real server, real hook round-trip, fake `claude` and fake SLURM) |
 
-Not yet: the Codex and Gemini adapters, `dev_alloc` rerouting (waits on spike S2), the vault and
+Not yet: `dev_alloc` rerouting (waits on spike S2), the vault and
 listening endpoints, ledger hard limits, Drive export, and the remaining phone screens. See `mobile/README.md`.
 
 ## 1. On aqua-hpc: install and run the risk tests (≈ 1 hour, once)
@@ -46,8 +52,11 @@ Send back `spike-out/report.json`. If S1's resume-without-prompt fails, Brain ne
 ```bash
 cd ~/cluster-brain/runtime
 python3 -m venv .venv && . .venv/bin/activate && pip install -e ".[qr]"
-brain init --repos ~/code --vault-root /scratch/$USER/vaults --endpoint https://<relay-host> --accept-conditions
+brain init --repos ~/code --vault-root /scratch/$USER/vaults --projects-root ~/code \
+           --endpoint https://<relay-host> --alt-endpoint https://<second-relay> --accept-conditions
 CLAUDE_CONFIG_DIR=~/.brain/claude claude          # log Claude in once for Brain-run sessions
+CODEX_HOME=~/.brain/codex codex login             # optional: Codex for Brain-run sessions
+agy --app_data_dir=../.brain/agy                 # optional: log Antigravity in once (Brain's agy profile)
 brain doctor
 ```
 `brain init` reports the placement it chose. For aqua-hpc it should be rung C, because the cluster has no

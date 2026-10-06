@@ -15,6 +15,9 @@ storage on the phone).
 
 1. On the cluster: `brain pair` prints a pairing payload (QR + short code):
    `{"v":1,"brain_pub":"<b64url>","endpoint":"https://…","code":"AQ7K-3H9D","secret":"<b64url 32B>","exp":<unix>}`
+   plus `"alt":["https://…"]` when failover relays are configured (`brain endpoint set URL --alt URL2`). The app tries
+   the relay that last answered first, then the others; POSTs are safe to retry through another relay because
+   Brain dedupes their Idempotency-Key, and each session challenge is verified against the relay that served it.
 2. `POST /v1/pair/complete`
    body `{"code","device_pub","device_name","nonce_device","sig","mac"}`
    - `transcript = sha256("cb-pair-v1" ‖ brain_pub ‖ device_pub ‖ endpoint ‖ nonce_device)`
@@ -33,9 +36,11 @@ Every other call: `Authorization: Bearer <access_token>`. Revoked devices get 40
 
 ## Objects
 
-Thread `{id, repo_id, title, mode: "readonly"|"worktree", branch, provider: "claude"|"codex"|"gemini"|"fake",
+Thread `{id, repo_id, title, mode: "readonly"|"worktree", branch, provider: "claude"|"codex"|"agy"|"fake",
 state: "idle"|"running"|"waiting"|"needs_you"|"paused", pinned, archived, muted, parent_id, fork_turn,
-last_seq, updated_at, last_event}`
+last_seq, updated_at, last_event, vault_dir}` — `vault_dir` is set for training runs (the run's own vault folder)
+
+Repo `{id, name, path, default_branch, profile, archive_policy, vault_root}`
 
 Event `{event_id, thread_id, seq, ts, type, visibility, turn_id, actor:{kind,device_id?}, payload,
 payload_ref?, hash, prev_hash}` — `payload` ≤ 8 KB; larger bodies are truncated (head + tail) with
@@ -55,7 +60,10 @@ Event types (payload fields):
 - `job.submitted` {job_id, name, partition, gpus, time_limit}
 - `job.state` {job_id, state, exit_code?, reason?}
 - `wait.created` / `wait.fired` {wait_id, kind, predicate}
-- `provider.status` {provider, status: "rate_limited"|"retrying"|"error", resets_at?, message}
+- `provider.status` {provider, status: "rate_limited"|"retrying"|"error"|"blocked", resets_at?, message}
+  (`blocked`: agy auto-denied a tool call that had no permission rule; that turn stopped there)
+- `provider.switched` {from, to, history_items} — the next turn first hands the new provider every
+  transcript item it has not seen (native session append for claude/codex, verbatim replay for agy)
 - `system.notice` {text}
 
 Approval `{id, thread_id, action_type, summary, decision_summary:{verb,target,blast_radius,
@@ -69,13 +77,19 @@ pending until decided; never auto-denied.
 | GET `/v1/health` | — | `{ok, brain_pub, version, rung, paused}` (no auth) |
 | GET `/v1/repos` | — | `[Repo]` |
 | GET `/v1/threads` | `?repo_id&state&archived=0` | `[Thread]` |
-| POST `/v1/threads` | `{repo_id, title?, mode, provider, base_ref?}` | `Thread` |
+| POST `/v1/threads` | `{repo_id, title?, mode, provider, base_ref?, run?, message?}` | `Thread` — `run: true` = training run (worktree + own vault folder); `message` is sent as the first message |
+| POST `/v1/projects` | `{name, idea, provider?}` | `{repo, thread}` — new repo under `projects_root` + vault under `vault_root`; the thread starts on the idea (422 if roots unset, 409 if it exists) |
+| GET `/v1/endpoints` | — | `{endpoints:[primary, ...alternates]}` — relays the app fails over between |
 | GET `/v1/threads/{id}` | — | `Thread` |
 | PATCH `/v1/threads/{id}` | `{title?, pinned?, archived?, muted?}` | `Thread` |
 | POST `/v1/threads/{id}/fork` | `{at_seq?, title, mode}` | `Thread` |
 | POST `/v1/threads/{id}/messages` | `{text}` | `{seq}` |
 | POST `/v1/threads/{id}/stop` | — | `{ok}` |
 | GET `/v1/threads/{id}/events` | `?after_seq=0&limit=200` | `{events:[Event], last_seq}` |
+| POST `/v1/threads/{id}/provider` | `{provider}` | `Thread` (409 while a turn runs or an approval is pending) |
+| GET `/v1/push/vapid` | — | `{public_key}` — VAPID applicationServerKey for the PWA |
+| POST `/v1/devices/web-push` | `{subscription:{endpoint, keys:{p256dh, auth}}}` | `{ok}` — the PWA's Web Push subscription; notifications are RFC 8291-encrypted |
+| GET `/v1/providers` | — | `[{name, native_handoff, defer}]` |
 | GET `/v1/pending` | — | `{approvals:[Approval], waits:[…], jobs:[Job], threads_needing_you:[Thread], since:{…}}` |
 | POST `/v1/approvals/{id}/decision` | `{decision:"allow"|"deny", note?, device_sig}` sig over `"cb-dec-v1" ‖ id ‖ decision` | `Approval` |
 | GET `/v1/jobs` | — | `[Job]` `{job_id, thread_id, name, state, gpus, elapsed, time_limit}` |

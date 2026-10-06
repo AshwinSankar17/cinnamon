@@ -6,4 +6,11 @@ mobile/node_modules/
 mobile/.expo/
 mobile/google-services.json
 spike-out/
+handoff-out/
+spikes/handoff-run*.log
 .DS_Store
+runtime/tests/handoff-live-report.json
+runtime/tests/handoff-live.log
+mobile/.impeccable/review/
+mobile/.impeccable/hook.cache.json
+mobile/.impeccable/surfaces/

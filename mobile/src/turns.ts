@@ -3,6 +3,7 @@
  * footer), and stand-alone rows for events that arrive outside any turn (e.g. a job finishing
  * hours later). Pure function of the events; screens recompute on every merge.
  */
+import { providerName } from './theme';
 import type {
   ApprovalDecided,
   ApprovalRequested,
@@ -13,6 +14,52 @@ import type {
   Provider,
   TurnEnded,
 } from './types';
+
+const FILE_KEYS = ['file_path', 'path', 'notebook_path', 'AbsolutePath', 'TargetFile', 'FilePath'];
+const VERB: Record<string, string> = {
+  Read: 'Read', view_file: 'Read', Write: 'Wrote', write_to_file: 'Wrote', Edit: 'Edited', MultiEdit: 'Edited',
+  replace_file_content: 'Edited', multi_replace_file_content: 'Edited', NotebookEdit: 'Edited', Glob: 'Listed',
+  list_dir: 'Listed', Grep: 'Searched', grep_search: 'Searched', WebFetch: 'Fetched', WebSearch: 'Searched the web',
+};
+
+function parseInput(input?: string): Record<string, unknown> | null {
+  if (!input) return null;
+  try {
+    const v = JSON.parse(input);
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null; // input_preview is cut at 1500 chars: fall back to the summary
+  }
+}
+
+/** The shell command a step ran, if it ran one. */
+export function stepCommand(s: Pick<Step, 'tool' | 'input' | 'summary'>): string | null {
+  const inp = parseInput(s.input);
+  const cmd = inp?.command ?? inp?.CommandLine ?? inp?.cmd;
+  if (typeof cmd === 'string') return cmd;
+  if (Array.isArray(cmd)) return cmd.join(' ');
+  return s.tool === 'Bash' || s.tool === 'run_command' ? s.summary : null;
+}
+
+function shortPath(p: string): string {
+  const parts = p.split('/').filter(Boolean);
+  return parts.length > 3 ? `…/${parts.slice(-3).join('/')}` : p;
+}
+
+/** One readable line for a step: the command for shell steps, "Edited …/src/model.py" for file tools. */
+export function stepLabel(s: Pick<Step, 'tool' | 'input' | 'summary'>): string {
+  const cmd = stepCommand(s);
+  if (cmd) return cmd;
+  const inp = parseInput(s.input);
+  const raw = (inp && FILE_KEYS.map((k) => inp[k]).find((v) => typeof v === 'string')) as string | undefined;
+  const fromSummary = /^(?:file_path|path|notebook_path)=(.+)$/.exec(s.summary ?? '')?.[1];
+  const path = raw ?? fromSummary;
+  const verb = VERB[s.tool] ?? s.tool;
+  if (path) return `${verb} ${shortPath(path)}`;
+  const q = inp?.pattern ?? inp?.query ?? inp?.url;
+  if (typeof q === 'string') return `${verb} ${q}`;
+  return s.summary || s.tool;
+}
 
 export type Step = {
   id: string;
@@ -45,7 +92,8 @@ export type Block =
   | { kind: 'terminal'; key: string; step: Step }
   | { kind: 'job'; key: string; job: JobInfo }
   | { kind: 'approval'; key: string; req: ApprovalRequested; decided?: ApprovalDecided }
-  | { kind: 'notice'; key: string; text: string; tone: 'info' | 'warn' | 'fail' };
+  | { kind: 'notice'; key: string; text: string; tone: 'info' | 'warn' | 'fail' }
+  | { kind: 'listen'; key: string; listenId: string; title: string; detail: string; summary?: string };
 
 export type Turn = {
   kind: 'turn';
@@ -141,7 +189,8 @@ export function buildItems(events: BrainEvent[]): Item[] {
         s.exitCode = e.payload.exit_code;
         s.output = e.payload.output_preview;
         s.outputRef = e.payload_ref ?? null;
-        if (s.output && s.output.trim()) place(e, { kind: 'terminal', key, step: s });
+        // only failures get a terminal card in the flow; other output opens from the step row
+        if (s.ok === false && s.output && s.output.trim()) place(e, { kind: 'terminal', key, step: s });
         break;
       }
 
@@ -213,7 +262,37 @@ export function buildItems(events: BrainEvent[]): Item[] {
         });
         break;
       case 'system.notice':
+        if (/^Thread created on /.test(e.payload.text)) break; // the header already says where the thread lives
         place(e, { kind: 'notice', key, text: e.payload.text, tone: 'info' });
+        break;
+      case 'listen.ready':
+        place(e, {
+          kind: 'listen',
+          key,
+          listenId: e.payload.listen_id,
+          title: e.payload.title,
+          detail: `${e.payload.items} sentences × ${e.payload.systems} systems`,
+        });
+        break;
+      case 'listen.rated': {
+        const b = [...items].reverse().flatMap((i) => (i.kind === 'turn' ? i.blocks : i.kind === 'row' ? [i.block] : []))
+          .find((x) => x.kind === 'listen' && x.listenId === e.payload.listen_id);
+        if (b && b.kind === 'listen') b.summary = e.payload.summary;
+        else place(e, { kind: 'listen', key, listenId: e.payload.listen_id, title: e.payload.title, detail: 'rated', summary: e.payload.summary });
+        break;
+      }
+      case 'provider.switched':
+        items.push({
+          kind: 'row',
+          key,
+          block: {
+            kind: 'notice',
+            key,
+            text: `Switched ${providerName[e.payload.from] ?? e.payload.from} → ${providerName[e.payload.to] ?? e.payload.to}` +
+              ` · ${e.payload.history_items} history items carry over`,
+            tone: 'info',
+          },
+        });
         break;
       default:
         break;

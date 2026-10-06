@@ -70,12 +70,24 @@ class Paths:
         return self.root / "claude"
 
     @property
+    def codex_home(self) -> Path:
+        return self.root / "codex"
+
+    @property
     def fcm_key(self) -> Path:
         return self.root / "fcm-service-account.json"
 
     @property
     def disabled_flag(self) -> Path:
         return self.root / "DISABLED"
+
+    @property
+    def admin_token(self) -> Path:
+        return self.root / "admin.token"
+
+    @property
+    def vapid_key(self) -> Path:
+        return self.root / "vapid.pem"
 
     @property
     def push_outbox(self) -> Path:
@@ -93,7 +105,7 @@ def ensure_root(p: Paths | None = None) -> Paths:
     """Create BRAIN_ROOT and its subdirectories with owner-only permissions."""
     p = p or paths()
     os.umask(0o077)
-    for d in (p.root, p.audit_dir, p.ir_dir, p.blobs, p.claude_config_dir):
+    for d in (p.root, p.audit_dir, p.ir_dir, p.blobs, p.claude_config_dir, p.codex_home):
         d.mkdir(parents=True, exist_ok=True)
         os.chmod(d, 0o700)
     return p
@@ -116,8 +128,8 @@ def check_permissions(p: Paths, fix: bool = False) -> list[str]:
         mode = stat.S_IMODE(path.stat().st_mode)
         return bool(mode & ~max_mode)
 
-    checks: list[tuple[Path, int]] = [(p.root, 0o700), (p.claude_config_dir, 0o700)]
-    for f in (p.identity_key, p.token_secret, p.hook_token, p.fcm_key, p.db):
+    checks: list[tuple[Path, int]] = [(p.root, 0o700), (p.claude_config_dir, 0o700), (p.codex_home, 0o700)]
+    for f in (p.identity_key, p.token_secret, p.hook_token, p.admin_token, p.fcm_key, p.vapid_key, p.db):
         checks.append((f, 0o600))
     home = Path.home()
     for f in (home / ".netrc", home / ".claude" / ".credentials.json", home / ".codex" / "auth.json",
