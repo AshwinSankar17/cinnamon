@@ -20,7 +20,8 @@ export function jobLabel(j: Job): string {
   return j.label || j.name;
 }
 
-export function JobRow({ j, onChanged }: { j: Job; onChanged: () => void }) {
+/** `nested`: shown inside its thread's group, so it is a flat row without the thread title. */
+export function JobRow({ j, onChanged, nested }: { j: Job; onChanged: () => void; nested?: boolean }) {
   const running = ACTIVE.has(j.state.toLowerCase());
   const cancel = () =>
     Alert.alert('Cancel job?', `${jobLabel(j)} (job ${j.job_id}) will be cancelled.`, [
@@ -35,18 +36,12 @@ export function JobRow({ j, onChanged }: { j: Job; onChanged: () => void }) {
   const state = j.state.toLowerCase().replace(/_/g, ' ');
   return (
     <View
-      style={{
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.hairline,
-        borderRadius: 14,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        minHeight: 64,
-      }}
+      style={[
+        { paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
+        nested
+          ? { borderTopWidth: 1, borderTopColor: colors.hairline, minHeight: 56, paddingVertical: 6 }
+          : { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.hairline, borderRadius: 14 },
+      ]}
     >
       <Dot color={jobColor(j.state)} />
       <Pressable
@@ -60,7 +55,7 @@ export function JobRow({ j, onChanged }: { j: Job; onChanged: () => void }) {
         </Text>
         <Mono numberOfLines={1}>
           {[
-            j.thread_title,
+            nested ? null : j.thread_title,
             running ? state : `${state}${j.exit_code ? ` (exit ${j.exit_code})` : ''} · ${ago(j.updated_at ? j.updated_at * 1000 : null)} ago`,
             j.gpus ? `${j.gpus} GPU` : null,
             running && elapsed ? elapsed : null,
