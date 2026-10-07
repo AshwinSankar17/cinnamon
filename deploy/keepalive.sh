@@ -3,6 +3,7 @@
 #   */10 * * * * $HOME/cluster-brain/deploy/keepalive.sh >> $HOME/.brain/keepalive.log 2>&1
 # Starts `brain serve` if no fresh lease exists, at most 3 starts per hour (CONDITIONS.md).
 set -u
+export PATH="$HOME/.local/bin:$PATH"  # cron's PATH lacks it; claude, codex and agy live there
 BRAIN_ROOT="${BRAIN_ROOT:-$HOME/.brain}"
 VENV="${BRAIN_VENV:-$HOME/cluster-brain/runtime/.venv}"
 PORT="${BRAIN_PORT:-8765}"

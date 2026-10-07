@@ -63,3 +63,22 @@ async def test_jobs_read_as_script_and_thread(brain):
     assert j["label"] == "eval_base_v0_20k" and j["thread_title"] == "EDIT TTS" and j["name"].startswith("brain.")
     with TestClient(create_app(brain, dev_no_auth=True)) as c:
         assert c.get("/v1/jobs").json()[0]["label"] == "eval_base_v0_20k"
+
+
+def test_lease_heartbeat_survives_a_failed_write(tmp_path, monkeypatch):
+    from brain import db as dbm
+    monkeypatch.setattr(dbm, "HEARTBEAT_SECONDS", 0.05)
+    lease = dbm.Lease(tmp_path / "brain.lease")
+    lease.acquire()
+    real, fails = lease._write, [1]
+
+    def flaky(data):
+        if fails:
+            fails.pop()
+            raise OSError(28, "No space left on device")
+        real(data)
+    lease._write = flaky
+    before = lease.read()["heartbeat"]
+    time.sleep(0.4)
+    assert lease._thread.is_alive() and lease.read()["heartbeat"] > before
+    lease.release()

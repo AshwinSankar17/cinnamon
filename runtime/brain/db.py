@@ -8,6 +8,7 @@ SQLite on NFS/Lustre is only safe with exactly one opener. We enforce that two w
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import sqlite3
@@ -262,7 +263,10 @@ class Lease:
 
     def _beat(self) -> None:
         while not self._stop.wait(HEARTBEAT_SECONDS):
-            self._write(self._me())
+            try:
+                self._write(self._me())
+            except OSError as e:  # e.g. a full disk for a moment: one missed beat must not stop all later ones
+                logging.getLogger("brain").warning("lease heartbeat failed: %s", e)
 
     def release(self) -> None:
         self._stop.set()
