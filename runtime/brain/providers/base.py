@@ -45,6 +45,8 @@ class Provider(Protocol):
     hydrate(ctx, items)              -> session_id after appending items to ctx.resume_session (seeding one if None);
                                         absent -> Brain replays missing history verbatim in the next prompt
     on_approved(ctx, tool_name, tool_input)  called before resuming an approved call (e.g. add a permission rule)
+    steer(thread_id, text) -> bool    deliver a message into the running turn, as the CLI itself does with a
+                                        message typed mid-turn; absent or False -> Brain queues it for the next turn
     """
     name: str
 

@@ -400,8 +400,7 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
 
     @app.post("/v1/threads/{tid}/stop")
     async def stop(tid: str, device: str = Depends(auth)) -> dict:
-        await brain.stop(tid)
-        return {"ok": True}
+        return {"ok": True, "unsent": await brain.stop(tid)}
 
     @app.post("/v1/threads/{tid}/retry")
     async def retry(tid: str, device: str = Depends(auth)) -> dict:  # async: it starts a turn on the event loop

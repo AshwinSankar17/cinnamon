@@ -100,13 +100,30 @@ class ClaudeProvider:
         transcript.write_claude(f, items, self._version)
         return sid
 
+    @staticmethod
+    async def _write(proc: asyncio.subprocess.Process, text: str) -> None:
+        assert proc.stdin
+        proc.stdin.write((json.dumps({"type": "user", "message": {"role": "user", "content": text}}) + "\n").encode())
+        await proc.stdin.drain()
+
+    async def steer(self, thread_id: str, text: str) -> bool:
+        """Claude Code's own mid-turn behaviour: a message sent while it works is read at its next step."""
+        p = self._procs.get(thread_id)
+        if not p or p.returncode is not None or not p.stdin or p.stdin.is_closing():
+            return False
+        try:
+            await self._write(p, text)
+        except (BrokenPipeError, ConnectionResetError):
+            return False
+        return True
+
     async def interrupt(self, thread_id: str) -> None:
         await stop_process(self._procs.get(thread_id))  # SIGINT records the turn; escalates only if ignored
 
     def _cmd(self, ctx: TurnContext) -> list[str]:
         cmd = [self.binary, "-p"]
-        if ctx.prompt is not None:
-            cmd.append(ctx.prompt)
+        if ctx.prompt is not None:  # the prompt goes in on stdin, which stays open so the owner can steer the turn
+            cmd += ["--input-format", "stream-json"]
         cmd += ["--output-format", "stream-json", "--verbose",
                 "--permission-mode", ctx.permission_mode,
                 "--settings", json.dumps(hook_settings())]
@@ -118,12 +135,16 @@ class ClaudeProvider:
 
     async def run_turn(self, ctx: TurnContext) -> TurnResult:
         env = {**os.environ, **ctx.env, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN": "1"}
+        streaming = ctx.prompt is not None
         proc = await asyncio.create_subprocess_exec(
             *self._cmd(ctx), cwd=str(ctx.cwd), env=env,
-            stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE if streaming else asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             limit=16 * 1024 * 1024, start_new_session=True,
         )
         self._procs[ctx.thread_id] = proc
+        if streaming:
+            await self._write(proc, ctx.prompt)
         res = TurnResult()
         tools: dict[str, str] = {}
         try:
@@ -137,6 +158,10 @@ class ClaudeProvider:
                 except json.JSONDecodeError:
                     continue
                 self._map(msg, ctx, res, tools)
+                if msg.get("type") == "result" and proc.stdin and not proc.stdin.is_closing():
+                    # turn over: no more steering. A message written just before this still runs (as its own
+                    # turn in this process) and its events keep streaming until EOF.
+                    proc.stdin.close()
             await proc.wait()
             if proc.returncode not in (0, None) and not res.stop_reason:
                 err = (await proc.stderr.read()).decode("utf-8", "replace")[-2000:] if proc.stderr else ""

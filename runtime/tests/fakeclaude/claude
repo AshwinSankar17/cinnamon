@@ -4,6 +4,8 @@
 import json, subprocess, sys, uuid, os
 args = sys.argv[1:]
 prompt = args[1] if len(args) > 1 and not args[1].startswith("--") else None
+if "--input-format" in args:  # stream-json: the prompt is the first user message on stdin
+    prompt = json.loads(sys.stdin.readline())["message"]["content"]
 settings = json.loads(args[args.index("--settings") + 1])
 resume = args[args.index("--resume") + 1] if "--resume" in args else None
 sid = resume or str(uuid.uuid4())

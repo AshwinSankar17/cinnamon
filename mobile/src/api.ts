@@ -464,7 +464,7 @@ export const api = {
       body: { text },
       idempotencyKey,
     }),
-  stopThread: (id: string) => authed<{ ok: boolean }>('POST', `/v1/threads/${encodeURIComponent(id)}/stop`, {}),
+  stopThread: (id: string) => authed<{ ok: boolean; unsent?: string[] }>('POST', `/v1/threads/${encodeURIComponent(id)}/stop`, {}),
 
   events: (id: string, afterSeq = 0, limit = 200) =>
     authed<{ events: BrainEvent[]; last_seq: number }>('GET', `/v1/threads/${encodeURIComponent(id)}/events`, {

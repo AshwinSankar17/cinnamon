@@ -201,7 +201,9 @@ export default function ThreadScreen() {
 
   const onStop = async () => {
     try {
-      await api.stopThread(id);
+      const { unsent } = await api.stopThread(id);
+      // like Esc in Claude Code: messages queued behind the stopped turn come back to the composer, unsent
+      if (unsent?.length) setText((cur) => [...unsent, cur].filter((s) => s.trim()).join('\n\n'));
     } catch (e) {
       Alert.alert('Could not stop', describeError(e));
     }

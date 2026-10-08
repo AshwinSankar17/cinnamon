@@ -118,7 +118,8 @@ class Brain:
         self.watcher = slurm.Watcher()
         self._tasks: dict[str, asyncio.Task] = {}
         self._turn_counts: dict[str, dict[str, int]] = {}
-        self._queued: dict[str, list[str]] = {}
+        # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
+        self._queued: dict[str, list[tuple[str, str]]] = {}
         self._elevate: set[str] = set()
         self._stopping: set[str] = set()  # the owner pressed Stop on this thread's running turn
         self._resume_after: dict[str, str | None] = {}  # decisions that arrived while their turn was still running  # threads whose next turn may leave the OS sandbox (an approval was granted)
@@ -135,7 +136,10 @@ class Brain:
         self.ir.log("pause" if value else "resume")
         if value:
             for tid in list(self._tasks):
-                await self.stop(tid, reason="Brain paused")
+                await self.stop(tid, reason="Brain paused", keep_queue=True)
+        else:
+            for tid in list(self._queued):  # what arrived while paused runs now, as promised
+                self._drain(tid)
         return self.paused
 
     # ---- threads ---------------------------------------------------------------------------------
@@ -394,13 +398,22 @@ class Brain:
         ev = self.events.append(thread_id, "user.message", {"text": text}, actor=actor or {"kind": "user"})
         if self.paused:
             self.events.append(thread_id, "system.notice", {"text": "Brain is paused; this message will run on resume."})
-            self._queued.setdefault(thread_id, []).append(text)
+            self._queued.setdefault(thread_id, []).append(("user", text))
             return ev["seq"]
         if thread_id in self._tasks and not self._tasks[thread_id].done():
-            self._queued.setdefault(thread_id, []).append(text)
-            self.events.append(thread_id, "system.notice", {"text": "Queued until the current turn ends."})
+            # mirror the model's own behaviour for a message typed mid-turn: steer the running turn where the
+            # provider does (Claude Code reads it at its next step), else queue it for right after this turn
+            steer = getattr(self.providers.get(t["provider"]), "steer", None)
+            if steer and await steer(thread_id, text):
+                # ponytail: recorded now, so in the shared history it sits before this turn's replies, not between them
+                self._append_transcript(thread_id, "user", None, [{"k": "user", "text": text}])
+                self.events.append(thread_id, "system.notice", {"text": "Sent into the running turn."})
+                return ev["seq"]
+            self._queued.setdefault(thread_id, []).append(("user", text))
+            self.events.append(thread_id, "system.notice", {"text": "Queued: runs as soon as this turn ends."})
             return ev["seq"]
-        self._start(thread_id, text)
+        self._queued.setdefault(thread_id, []).append(("user", text))
+        self._drain(thread_id)  # with anything held back, e.g. a job that finished while the thread was stopped
         return ev["seq"]
 
     def _start(self, thread_id: str, prompt: str | None, wake_reason: str | None = None,
@@ -408,9 +421,22 @@ class Brain:
         task = asyncio.create_task(self._run_turn(thread_id, prompt, wake_reason, retry_of))
         self._tasks[thread_id] = task
 
-    async def stop(self, thread_id: str, reason: str = "Stopped from the phone") -> None:
+    def _drain(self, thread_id: str) -> None:
+        """Run what queued up for an idle thread as one turn (nothing is ever dropped while Brain is paused)."""
+        if self.paused or (thread_id in self._tasks and not self._tasks[thread_id].done()):
+            return
+        queued = self._queued.pop(thread_id, [])
+        if queued:
+            woken = all(k == "wake" for k, _ in queued)
+            self._start(thread_id, "\n\n".join(text for _, text in queued),
+                        wake_reason="wait fired" if woken else None)
+
+    async def stop(self, thread_id: str, reason: str = "Stopped from the phone", keep_queue: bool = False) -> list[str]:
+        """Stop the running turn. Like Esc in Claude Code, messages queued behind it are not sent: they are
+        returned (the phone puts them back in the composer). keep_queue (pausing) keeps them for later."""
         t = self.thread(thread_id)
         task = self._tasks.get(thread_id)
+        held = self._queued.pop(thread_id, [])  # taken first, so the stopped turn's end does not run them
         if t and task and not task.done():
             self._stopping.add(thread_id)
             prov = self.providers.get(t["provider"])
@@ -422,7 +448,17 @@ class Brain:
                 task.cancel()
             self._stopping.discard(thread_id)
             self.events.append(thread_id, "system.notice", {"text": reason})
-        self._queued.pop(thread_id, None)
+        if keep_queue:
+            self._queued[thread_id] = held + self._queued.get(thread_id, [])
+            return []
+        wakes = [q for q in held if q[0] == "wake"]  # e.g. "job finished": kept, delivered with the next message
+        if wakes:
+            self._queued[thread_id] = wakes + self._queued.get(thread_id, [])
+        unsent = [text for kind, text in held if kind == "user"]
+        if unsent:
+            self.events.append(thread_id, "system.notice", {"text": f"Not sent (stopped): {len(unsent)} queued "
+                                                            f"message{'s' if len(unsent) > 1 else ''}, back in your composer."})
+        return unsent
 
     def retry_turn(self, thread_id: str) -> None:
         """Run the thread's last turn again, with the same prompt, when it failed or was stopped."""
@@ -612,9 +648,8 @@ class Brain:
             else:
                 self._start(thread_id, resume, wake_reason="approval decided during the turn")
                 return  # queued messages run after the resumed turn
-        queued = self._queued.pop(thread_id, [])
-        if queued and not self.paused and self._resting_state(thread_id) == "idle":
-            self._start(thread_id, "\n\n".join(queued))
+        # a message sent mid-turn runs next even if the thread now waits on a job or an approval: the owner asked
+        self._drain(thread_id)
 
     def _resting_state(self, thread_id: str) -> str:
         if self.db.one("SELECT 1 FROM approvals WHERE thread_id=? AND state='pending'", (thread_id,)):
@@ -913,11 +948,8 @@ class Brain:
                 await self.wake(w["thread_id"], reason)
 
     async def wake(self, thread_id: str, reason: str) -> None:
-        if self.paused:
-            self._queued.setdefault(thread_id, []).append(reason)
-            return
-        if thread_id in self._tasks and not self._tasks[thread_id].done():
-            self._queued.setdefault(thread_id, []).append(reason)
+        if self.paused or (thread_id in self._tasks and not self._tasks[thread_id].done()):
+            self._queued.setdefault(thread_id, []).append(("wake", reason))
             return
         self._ledger("wakes", 1, thread_id)
         self._start(thread_id, reason, wake_reason="wait fired")
