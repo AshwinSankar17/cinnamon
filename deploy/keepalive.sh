@@ -4,6 +4,12 @@
 # Starts `brain serve` if no fresh lease exists, at most 3 starts per hour (CONDITIONS.md).
 set -u
 export PATH="$HOME/.local/bin:$PATH"  # cron's PATH lacks it; claude, codex and agy live there
+# cron does not read ~/.bashrc: load SLURM the way login shells do (sbatch/squeue on PATH, SLURM_CONF).
+# The site's module init is not nounset-safe.
+set +u
+[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh && module load slurm 2>/dev/null
+set -u
+command -v sbatch >/dev/null || echo "$(date -Is) warning: sbatch not on PATH; Brain cannot submit jobs"
 BRAIN_ROOT="${BRAIN_ROOT:-$HOME/.brain}"
 VENV="${BRAIN_VENV:-$HOME/cluster-brain/runtime/.venv}"
 PORT="${BRAIN_PORT:-8765}"
