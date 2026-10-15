@@ -23,7 +23,7 @@ def _job(brain, tid, job_id="9001", label="v3_eval_fullb200k", state="COMPLETED"
 async def test_a_job_woken_turn_pushes_its_first_line(brain, pushes):
     t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
     _job(brain, t["id"])
-    await brain.wake(t["id"], "[Brain] SLURM job 9001 finished: COMPLETED")
+    await brain.wake(t["id"], "[Brain] SLURM job 9001 finished: COMPLETED", job_id="9001")
     await _settle(brain, t["id"])
     done = [p for p in pushes if p[0] == "done"]
     assert len(done) == 1
@@ -176,3 +176,92 @@ def test_endpoint_change_reaches_pwa_devices(brain, monkeypatch):
     monkeypatch.setattr(brain, "_send_web", lambda did, sub, kind, title, body, data: web.append((kind, body)))
     brain.set_endpoint("https://brain.example.org")
     assert web == [("moved", "https://brain.example.org")]
+
+
+# ---- final-review fixes ---------------------------------------------------------------------------
+from brain.policy import _strip_heredocs, classify
+
+BRAIN_CTX = PolicyContext(worktree="/w/t1", vault_roots=("/vaults",), scratch_roots=("/tmp",), brain_root="/home/u/.brain")
+
+
+def test_heredocs_fed_to_a_shell_are_still_checked():
+    assert classify("Bash", {"command": "bash <<'EOF'\ncat /home/u/.brain/identity.ed25519\nEOF"}, BRAIN_CTX).verdict == "deny"
+    assert _out_of_scope_writes("ssh node1 <<'EOF'\necho hi > /etc/motd\nEOF", CTX) == ["/etc/motd"]
+    quoted = "echo '<<EOF'\nrm -rf /etc/x\nEOF"  # `<<` inside quotes is not a heredoc: nothing is stripped
+    assert _strip_heredocs(quoted) == quoted
+    assert _out_of_scope_writes("cat > f <<EOF\nEOF\necho x > /etc/zz\nEOF", CTX) == ["/etc/zz"]
+
+
+async def test_finished_push_names_the_job_that_woke_the_thread_not_the_newest(brain, pushes):
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    _job(brain, t["id"], job_id="9010", label="v3_eval_fullb200k", state="COMPLETED")
+    _job(brain, t["id"], job_id="9011", label="v3_next_run", state="PENDING")  # submitted after; newest updated_at
+    brain.db.x("INSERT INTO waits(id, thread_id, kind, predicate, created_at) VALUES ('w9', ?, 'slurm_job_completed', ?, 0)",
+               (t["id"], '{"job_id": "9010"}'))
+    await brain.tick()
+    await _settle(brain, t["id"])
+    done = [ti for k, ti, _ in pushes if k == "done"]
+    assert done == ["EDIT TTS: v3_eval_fullb200k finished"]
+
+
+async def test_non_job_wakes_do_not_push_finished(brain, pushes):
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    _job(brain, t["id"])
+    await brain.wake(t["id"], "[Brain] Usage window reset. Continue where you left off.")
+    await _settle(brain, t["id"])
+    assert [k for k, _, _ in pushes if k == "done"] == []
+
+
+async def test_a_failed_job_with_a_waiting_agent_pushes_once_via_the_agent(brain, pushes, monkeypatch):
+    from brain import slurm
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    _job(brain, t["id"], job_id="9012", label="v3_gate", state="RUNNING")
+    brain.db.x("INSERT INTO waits(id, thread_id, kind, predicate, created_at) VALUES ('w10', ?, 'slurm_job_completed', ?, 0)",
+               (t["id"], '{"job_id": "9012"}'))
+    monkeypatch.setattr(brain.watcher, "poll", lambda jobs, force: [slurm.JobUpdate("9012", "FAILED", 1, "")])
+    await brain.tick()
+    await _settle(brain, t["id"])
+    assert [ti for k, ti, _ in pushes] == ["EDIT TTS: v3_gate failed"]
+
+
+def test_bad_quiet_hours_never_raise_and_equal_bounds_mean_off(brain):
+    brain.settings.raw["quiet_hours_enabled"] = True
+    brain.settings.quiet_hours = (1380, "07:00")  # YAML 1.1 reads unquoted 23:00 as an integer
+    assert brain._quiet_now(_st(3, 40)) is False
+    brain.settings.quiet_hours = ("00:00", "00:00")
+    assert brain._quiet_now(_st(3, 40)) is False
+
+
+def test_push_bodies_are_redacted(brain, monkeypatch):
+    sent = []
+    monkeypatch.setattr(brain, "_push_all", lambda kind, title, body, data: sent.append((title, body)))
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    brain._notify(t["id"], "failed", "key wandb-secret-0123456789", "auth failed for wandb-secret-0123456789", {})
+    assert "wandb-secret-0123456789" not in repr(sent)
+
+
+def _stub_turn(brain, monkeypatch, **res):
+    from brain.providers.base import TurnResult
+
+    async def run_turn(ctx):
+        return TurnResult(**res)
+    monkeypatch.setattr(brain.providers["fake"], "run_turn", run_turn)
+
+
+async def test_a_quota_hit_pushes_paused_only(brain, pushes, monkeypatch):
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    _stub_turn(brain, monkeypatch, stop_reason="error", error="usage limit reached", rate_limited_until=time.time() + 3600)
+    await brain.send_message(t["id"], "go")
+    await _settle(brain, t["id"])
+    assert [k for k, _, _ in pushes] == ["needs_you"]
+
+
+async def test_a_job_woken_turn_waiting_on_approval_does_not_push_finished(brain, pushes, monkeypatch):
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    _job(brain, t["id"], job_id="9013")
+    brain.db.x("INSERT INTO waits(id, thread_id, kind, predicate, created_at) VALUES ('w11', ?, 'slurm_job_completed', ?, 0)",
+               (t["id"], '{"job_id": "9013"}'))
+    _stub_turn(brain, monkeypatch, stop_reason="tool_deferred", text="Waiting for your approval.")
+    await brain.tick()
+    await _settle(brain, t["id"])
+    assert [k for k, _, _ in pushes if k == "done"] == []

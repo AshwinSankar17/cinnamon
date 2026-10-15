@@ -121,6 +121,8 @@ class Brain:
         self._turn_counts: dict[str, dict[str, int]] = {}
         # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
         self._queued: dict[str, list[tuple[str, str]]] = {}
+        # jobs whose completion woke a thread and has not been handed to a turn yet; the turn that takes them reports them
+        self._woken_jobs: dict[str, list[str]] = {}
         self._elevate: set[str] = set()
         self._stopping: set[str] = set()  # the owner pressed Stop on this thread's running turn
         self._resume_after: dict[str, str | None] = {}  # decisions that arrived while their turn was still running  # threads whose next turn may leave the OS sandbox (an approval was granted)
@@ -530,6 +532,7 @@ class Brain:
         t = self.thread(thread_id)
         prov = self.providers[t["provider"]]
         turn_id = f"turn_{uuid.uuid4().hex[:12]}"
+        woke_for = [] if retry_of else self._woken_jobs.pop(thread_id, [])
         counts = {"reads": 0, "edits": 0, "commands": 0, "failed": 0}
         started = now()
         self._set_state(thread_id, "running")
@@ -636,13 +639,15 @@ class Brain:
         self._ledger("output_tokens", res.usage.get("output_tokens", 0), thread_id)
         self._set_state(thread_id, self._resting_state(thread_id))
         first_line = next((ln.strip() for ln in (res.text or "").splitlines() if ln.strip()), "Done.")[:200]
-        if res.stop_reason == "error":  # the owner hears about failures, including a provider that will not start
+        if res.stop_reason == "error" and not res.rate_limited_until:  # a quota stop already said "paused"
             self._notify(thread_id, "failed", f"{t['title']}: turn failed", (res.error or "")[-200:],
                          {"thread_id": thread_id, "turn_id": turn_id})
-        elif res.stop_reason != "cancelled" and wake_reason == "wait fired":  # a job came back: say what the agent made of it
-            j = self.db.one("SELECT label, name FROM jobs WHERE thread_id=? ORDER BY updated_at DESC LIMIT 1", (thread_id,))
-            what = (j["label"] or j["name"]) if j else "job"
-            self._notify(thread_id, "done", f"{t['title']}: {what} finished", first_line, {"thread_id": thread_id})
+        elif woke_for and res.stop_reason not in ("error", "cancelled", "tool_deferred"):  # jobs came back: say what the agent made of them
+            j = self.db.one("SELECT label, name, state FROM jobs WHERE job_id=?", (woke_for[0],))
+            what = (j["label"] or j["name"]) if j else f"job {woke_for[0]}"
+            verb = "finished" if not j or j["state"] == "COMPLETED" else j["state"].lower().replace("_", " ")
+            more = f" (+{len(woke_for) - 1} more)" if len(woke_for) > 1 else ""
+            self._notify(thread_id, "done", f"{t['title']}: {what} {verb}{more}", first_line, {"thread_id": thread_id})
         else:
             done_after = float(self.settings.raw.get("notify_done_after_s", 600))  # owner-started turns: long ones only
             if dur > done_after * 1000 and not res.error and self._resting_state(thread_id) == "idle":
@@ -940,7 +945,10 @@ class Brain:
                                                                  "exit_code": u.exit_code, "reason": u.reason})
             if u.state in slurm.TERMINAL:
                 self.ir.log("job.end", job=u.job_id, state=u.state, exit=u.exit_code)
-                if u.state != "COMPLETED" and j:
+                waited = j and self.db.one(
+                    "SELECT 1 FROM waits WHERE thread_id=? AND state='open' AND kind='slurm_job_completed'"
+                    " AND json_extract(predicate, '$.job_id')=?", (j["thread_id"], u.job_id))
+                if u.state != "COMPLETED" and j and not waited:  # with an agent waiting, its woken turn reports it
                     t = self.thread(j["thread_id"])
                     self._notify(j["thread_id"], "failed", f"{j['label'] or j['name']} {u.state.lower()}",
                                  f"{t['title'] if t else ''} · exit {u.exit_code}", {"thread_id": j["thread_id"], "job_id": u.job_id})
@@ -960,9 +968,11 @@ class Brain:
                 self.db.x("UPDATE waits SET state='fired', fired_at=? WHERE id=?", (now(), w["id"]))
                 self.events.append(w["thread_id"], "wait.fired", {"wait_id": w["id"], "kind": w["kind"],
                                                                   "predicate": json.dumps(pred)})
-                await self.wake(w["thread_id"], reason)
+                await self.wake(w["thread_id"], reason, pred.get("job_id") if w["kind"] == "slurm_job_completed" else None)
 
-    async def wake(self, thread_id: str, reason: str) -> None:
+    async def wake(self, thread_id: str, reason: str, job_id: str | None = None) -> None:
+        if job_id:
+            self._woken_jobs.setdefault(thread_id, []).append(job_id)
         if self.paused or (thread_id in self._tasks and not self._tasks[thread_id].done()):
             self._queued.setdefault(thread_id, []).append(("wake", reason))
             return
@@ -995,6 +1005,7 @@ class Brain:
                           "edits": turns["e"], "paused": self.paused}}
 
     def _notify(self, thread_id: str, kind: str, title: str, body: str, data: dict) -> None:
+        title, body = self.redactor.redact(title)[0], self.redactor.redact(body)[0]  # pushes leave the cluster in clear
         t = self.thread(thread_id)
         if t and t["muted"] and kind not in ("approval", "needs_you"):
             return
@@ -1012,11 +1023,17 @@ class Brain:
                 self._send_web(d["id"], json.loads(d["web_push"]), kind, title, body, data)
 
     def _quiet_now(self, at: time.struct_time | None = None) -> bool:
-        if not self.settings.raw.get("quiet_hours_enabled", True) or len(self.settings.quiet_hours) != 2:
+        if not self.settings.raw.get("quiet_hours_enabled", True):
+            return False
+        try:  # a hand-edited settings.yaml (e.g. unquoted 23:00, which YAML reads as 1380) must never stop pushes or the scheduler
+            start, end = ((int(h) * 60 + int(m)) for h, m in (str(x).split(":") for x in self.settings.quiet_hours))
+        except (TypeError, ValueError):
+            log.warning("quiet_hours %r not understood; quiet hours are off", self.settings.quiet_hours)
+            return False
+        if start == end:
             return False
         lt = at or time.localtime()
         cur = lt.tm_hour * 60 + lt.tm_min
-        start, end = ((int(h) * 60 + int(m)) for h, m in (x.split(":") for x in self.settings.quiet_hours))
         return start <= cur < end if start < end else (cur >= start or cur < end)
 
     def _flush_digest(self) -> int:

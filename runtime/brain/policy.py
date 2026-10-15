@@ -148,12 +148,19 @@ SEPARATORS = {";", "&&", "||", "|", "&", "|&", "(", ")"}
 REDIRECTS = {">", ">>", ">|", "&>", "&>>", ">&"}
 
 
-HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n.*?\n\s*\2\s*(?=\n|$)", re.S)
+HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1([^\n]*)\n(?:.*?\n)??[ \t]*\2[ \t]*(?=\n|$)", re.S)
+DATA_SINKS = {"cat", "tee"}  # commands whose heredoc body is data, not shell that runs
 
 
 def _strip_heredocs(cmd: str) -> str:
-    """`cat > f <<'EOF' ... EOF`: keep `cat > f` (a real write), drop the body (text, not commands)."""
-    return HEREDOC.sub(lambda m: m.group(3), cmd)
+    """`cat > f <<'EOF' ... EOF`: keep `cat > f` (a real write), drop the body (text, not commands).
+    A heredoc fed to anything else (bash, ssh, python) keeps its body: it runs, so the policy must see it."""
+    def sub(m: re.Match) -> str:
+        line = m.string[m.string.rfind("\n", 0, m.start()) + 1:m.start()]
+        words = re.split(r"&&|\|\||[;|&(]", line)[-1].split()
+        words = [w for w in words if not re.match(r"^\w+=", w)]  # leading VAR=value assignments
+        return m.group(3) if words and PurePosixPath(words[0]).name in DATA_SINKS else m.group(0)
+    return HEREDOC.sub(sub, cmd)
 
 
 def _parse(cmd: str) -> tuple[list[list[str]], list[str]]:
