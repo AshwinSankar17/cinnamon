@@ -49,10 +49,13 @@ export default function ThreadScreen() {
     });
   }, [id, merge]);
 
-  // Focus: local mirror → REST thread + catch-up → WS subscribe from the last seq we hold.
+  // Focus: local mirror → REST thread + catch-up → WS subscribe from the last seq we hold. Opening the thread is
+  // reading it: Brain's read marker moves on open, on each reply that arrives while it is open, and on leaving.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      // read through what this screen holds (and so showed), never further: a reply missed while the socket was down stays unread
+      const seen = (seq?: number) => { (seq ? Promise.resolve(seq) : lastSeq(id)).then((n) => api.markSeen(id, n)).catch(() => undefined); };
       let unsub: (() => void) | null = null;
       (async () => {
         const [localThread, localEvents] = await Promise.all([getThread(id), getEvents(id)]);
@@ -65,6 +68,7 @@ export default function ThreadScreen() {
           setThread(t);
           await upsertThreads([t]);
           await catchUp();
+          seen();
           setLoadErr(null);
         } catch (e) {
           if (!cancelled) setLoadErr(describeError(e));
@@ -73,6 +77,7 @@ export default function ThreadScreen() {
         const after = await lastSeq(id);
         unsub = brainSocket.subscribe(id, after, (ev) => {
           merge([ev]);
+          if (ev.type === 'turn.ended' || ev.type === 'job.state') seen(ev.seq); // read as it arrives: not news elsewhere
           if (REFRESH_ON.has(ev.type)) {
             api.thread(id).then(
               (t) => {
@@ -87,6 +92,7 @@ export default function ThreadScreen() {
       return () => {
         cancelled = true;
         unsub?.();
+        seen();
       };
     }, [id, catchUp, merge]),
   );

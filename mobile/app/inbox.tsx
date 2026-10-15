@@ -12,21 +12,25 @@ import { useRemote } from '@/src/hooks';
 import { getMeta, getThreads, upsertThreads } from '@/src/store';
 import { colors, providerShort, type } from '@/src/theme';
 import type { Approval, Job, Pending, Thread } from '@/src/types';
+import { hrefOf, visible, type Item } from '@/src/attention';
+import { clearSnoozed, getSnoozed, later as laterOn } from '@/src/standup';
 
-type InboxData = { pending: Pending; running: Thread[]; byId: Record<string, Thread>; leftAt: number | null };
+type InboxData = { pending: Pending; running: Thread[]; byId: Record<string, Thread>; leftAt: number | null; items: Item[]; hidden: number };
 
 
 async function loadInbox(): Promise<InboxData> {
   const leftAt = await getMeta('left_at');
-  const [pending, running] = await Promise.all([
+  const [pending, running, snoozed] = await Promise.all([
     api.pending(leftAt ? Number(leftAt) : null),
     api.threads({ state: 'running', archived: 0 }),
+    getSnoozed(),
   ]);
+  const items = visible(pending.attention, snoozed, Date.now());
   await upsertThreads([...pending.threads_needing_you, ...running]);
   const local = await getThreads(true);
   const byId: Record<string, Thread> = {};
   for (const t of local) byId[t.id] = t;
-  return { pending, running, byId, leftAt: leftAt ? Number(leftAt) : null };
+  return { pending, running, byId, leftAt: leftAt ? Number(leftAt) : null, items, hidden: (pending.attention?.length ?? 0) - items.length };
 }
 
 function sinceProse(d: InboxData, paused: boolean): string {
@@ -41,17 +45,11 @@ function sinceProse(d: InboxData, paused: boolean): string {
   else if (finished) parts.push(`${cap(word(finished))} ${jobs(finished)} finished.`);
   else if (failedN) parts.push(`${cap(word(failedN))} ${jobs(failedN)} failed.`);
   if (typeof s.edits === 'number' && s.edits > 0) parts.push(`${cap(word(s.edits))} ${s.edits === 1 ? 'edit' : 'edits'}.`);
-  const needs = d.pending.approvals.length + needsThreads(d.pending).length + (d.pending.listening?.length ?? 0);
+  const needs = d.items.filter((i) => i.tier <= 4).length; // the same count the home and the companion give
   if (d.running.length) parts.push(`${cap(word(d.running.length))} ${d.running.length === 1 ? 'thread is' : 'threads are'} working.`);
   if (paused) parts.push('Brain is paused; nothing new will start until you resume.');
   parts.push(needs ? `${cap(word(needs))} ${needs === 1 ? 'thing needs' : 'things need'} you.` : 'Nothing needs you.');
   return parts.join(' ');
-}
-
-/** A thread waiting on an approval is listed once, as that approval. */
-function needsThreads(p: Pending): Thread[] {
-  const withApproval = new Set(p.approvals.map((a) => a.thread_id));
-  return p.threads_needing_you.filter((t) => !withApproval.has(t.id));
 }
 
 function count(label: string, n: number | null): string {
@@ -64,7 +62,7 @@ function cap(s: string) {
 
 export default function InboxScreen() {
   const conn = useConnection();
-  const { data, error, loading, reload } = useRemote(loadInbox, { pollMs: 20_000 });
+  const { data, error, loading, reload } = useRemote(loadInbox, { pollMs: 60_000, live: true });
   const [pausing, setPausing] = useState(false);
 
   const togglePause = useCallback(async () => {
@@ -86,9 +84,12 @@ export default function InboxScreen() {
   const failed = doneJobs.filter((j) => jobColor(j.state) === colors.failed).length;
   const runningIds = new Set(data?.running.map((t) => t.id));
   const looseJobs = runningJobs.filter((j) => !j.thread_id || !runningIds.has(j.thread_id)); // jobs of threads not shown below
-  const needs = data ? [...data.pending.approvals.map((a) => a.id), ...needsThreads(data.pending).map((t) => t.id)].length : 0;
-  const listening = data?.pending.listening ?? [];
-  const quiet = data && !needs && !listening.length && !runningJobs.length && !data.running.length;
+  const items = data?.items ?? [];
+  const tier = (lo: number, hi: number) => items.filter((i) => i.tier >= lo && i.tier <= hi);
+  const [needs, failures, listening, updates] = [tier(1, 2), tier(3, 3), tier(4, 4), tier(5, 5)];
+  const quiet = data && !items.length && !runningJobs.length && !data.running.length;
+  const later = (key: string) => laterOn(key).then(reload);
+  const skip = (id: string) => api.skipListening(id).then(reload, (e) => Alert.alert('Could not skip', describeError(e)));
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>
@@ -123,24 +124,27 @@ export default function InboxScreen() {
           </View>
         ) : null}
 
-        {needs ? <SectionLabel>{count('Needs you', needs)}</SectionLabel> : null}
-        {data?.pending.approvals.map((a) => (
-          <ApprovalCard key={a.id} a={a} thread={data.byId[a.thread_id]} />
-        ))}
-        {data ? needsThreads(data.pending).map((t) => <NeedsThreadCard key={t.id} t={t} />) : null}
+        {needs.length ? <SectionLabel>{count('Needs you', needs.length)}</SectionLabel> : null}
+        {needs.map((i) => {
+          const a = i.kind === 'approval' ? data?.pending.approvals.find((x) => x.id === i.target) : undefined;
+          return a ? <ApprovalCard key={i.key} a={a} thread={data?.byId[a.thread_id]} />
+            : <ItemCard key={i.key} i={i} action="Open thread" onLater={() => later(i.key)} />;
+        })}
+
+        {failures.length ? <SectionLabel>{count('Failed', failures.length)}</SectionLabel> : null}
+        {failures.map((i) => <ItemCard key={i.key} i={i} action="Open thread" onLater={() => later(i.key)} />)}
 
         {listening.length ? <SectionLabel>{count('Ready to listen', listening.length)}</SectionLabel> : null}
-        {listening.map((l) => (
-          <Card key={l.id} tone="needs">
-            <Text style={type.cardTitle} numberOfLines={2}>
-              {l.title}
-            </Text>
-            <Mono numberOfLines={1}>
-              {[data?.byId[l.thread_id]?.title, `${l.n_items} sentences × ${l.n_systems} systems`].filter(Boolean).join(' · ')}
-            </Mono>
-            <Button label="Listen (blind)" kind="primary" style={{ maxWidth: 360 }} onPress={() => router.push(`/listen/${encodeURIComponent(l.id)}`)} />
-          </Card>
-        ))}
+        {listening.map((i) => <ItemCard key={i.key} i={i} action="Listen (blind)" onSkip={() => skip(i.target)} />)}
+
+        {updates.length ? <SectionLabel>{count('Updates', updates.length)}</SectionLabel> : null}
+        {updates.map((i) => <ItemCard key={i.key} i={i} action="Open thread" quiet onLater={() => later(i.key)} />)}
+
+        {data?.hidden ? (
+          <Pressable accessibilityRole="button" onPress={() => clearSnoozed().then(reload)} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={[type.body, { color: colors.text2 }]}>{`${cap(word(data.hidden))} set aside with Later on this phone · show them`}</Text>
+          </Pressable>
+        ) : null}
 
         {data?.running.length || looseJobs.length ? (
           <SectionLabel>{count('Working', (data?.running.length ?? 0) + looseJobs.length)}</SectionLabel>
@@ -195,17 +199,17 @@ function ApprovalCard({ a, thread }: { a: Approval; thread?: Thread }) {
   );
 }
 
-function NeedsThreadCard({ t }: { t: Thread }) {
+/** One item from Brain's attention list: open it, set it aside ("Later", this phone), or skip a listening test. */
+function ItemCard({ i, action, quiet, onLater, onSkip }: { i: Item; action: string; quiet?: boolean; onLater?: () => void; onSkip?: () => void }) {
   return (
-    <Card tone="needs">
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <ProviderPill provider={t.provider} variant="outline" />
-        <Text style={[type.cardTitle, { flex: 1 }]} numberOfLines={2}>
-          {t.title}
-        </Text>
+    <Card tone={quiet ? undefined : 'needs'}>
+      <Text style={type.cardTitle} numberOfLines={2}>{i.title}</Text>
+      {i.detail ? <Mono numberOfLines={1}>{i.detail}</Mono> : null}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Button label={action} kind={quiet ? undefined : 'primary'} style={{ flex: 1, maxWidth: 360 }} onPress={() => router.push(hrefOf(i) as never)} />
+        {onLater ? <Button label="Later" style={{ flex: 1, maxWidth: 180 }} onPress={onLater} /> : null}
+        {onSkip ? <Button label="Skip" style={{ flex: 1, maxWidth: 180 }} onPress={onSkip} /> : null}
       </View>
-      <Mono numberOfLines={1}>{[t.repo_id, t.branch, t.state.replace('_', ' ')].filter(Boolean).join(' · ')}</Mono>
-      <Button label="Open thread" kind="primary" style={{ maxWidth: 360 }} onPress={() => router.push(`/thread/${encodeURIComponent(t.id)}`)} />
     </Card>
   );
 }

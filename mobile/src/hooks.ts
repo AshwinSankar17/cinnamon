@@ -2,28 +2,49 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { describeError } from './api';
+import { brainSocket } from './ws';
 
 /**
- * Fetch on focus, optional polling while focused + foregrounded, manual reload for pull-to-refresh.
- * Lists have no WebSocket channel in v0.2 (WS is per-thread), so Inbox/Threads/Runs poll gently.
+ * Refetch while focused whenever anything changes on Brain (the socket's `subscribe_all`), at most once per `ms`.
+ * A burst of events (a turn streaming tools) becomes one reload.
  */
-export function useRemote<T>(fetcher: () => Promise<T>, opts: { pollMs?: number; initial?: T | null } = {}) {
+export function useLiveReload(reload: () => void, enabled = true, ms = 1500) {
+  useFocusEffect(
+    useCallback(() => {
+      if (!enabled) return;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const off = brainSocket.onChange(() => {
+        if (!timer) timer = setTimeout(() => { timer = null; reload(); }, ms);
+      });
+      return () => { off(); if (timer) clearTimeout(timer); };
+    }, [reload, enabled, ms]),
+  );
+}
+
+/**
+ * Fetch on focus, optional polling while focused + foregrounded, manual reload for pull-to-refresh. `live` also
+ * refetches on any change Brain announces; the poll is then only a fallback for a socket that is down.
+ */
+export function useRemote<T>(fetcher: () => Promise<T>, opts: { pollMs?: number; initial?: T | null; live?: boolean } = {}) {
   const [data, setData] = useState<T | null>(opts.initial ?? null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const fetchRef = useRef(fetcher);
   fetchRef.current = fetcher;
 
+  const latest = useRef(0); // overlapping reloads (a slow relay, a burst of changes): only the newest request lands
   const reload = useCallback(async () => {
+    const n = ++latest.current;
     setLoading(true);
     try {
       const d = await fetchRef.current();
+      if (n !== latest.current) return;
       setData(d);
       setError(null);
     } catch (e) {
-      setError(describeError(e));
+      if (n === latest.current) setError(describeError(e));
     } finally {
-      setLoading(false);
+      if (n === latest.current) setLoading(false);
     }
   }, []);
 
@@ -37,6 +58,7 @@ export function useRemote<T>(fetcher: () => Promise<T>, opts: { pollMs?: number;
       return () => clearInterval(id);
     }, [reload, opts.pollMs]),
   );
+  useLiveReload(reload, !!opts.live);
 
   return { data, setData, error, loading, reload };
 }

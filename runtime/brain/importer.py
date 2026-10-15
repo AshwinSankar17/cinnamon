@@ -267,6 +267,11 @@ def candidates(brain) -> list[dict]:
             for c in discover(brain.settings)]
 
 
+def _arrive_read(brain, tid: str) -> None:
+    """The owner lived through this history in their terminal: none of its replies is unread news."""
+    brain.mark_seen(tid)
+
+
 def import_session(brain, provider: str, session_id: str, provider_override: str | None = None) -> dict:
     with _LOCK:
         return _import(brain, provider, session_id, provider_override)
@@ -301,5 +306,6 @@ def _import(brain, provider: str, session_id: str, provider_override: str | None
     # last: a failed import is never "done". updated_at is the session's own last activity, not the import time, so an
     # old session ranks below the threads actually being worked on.
     brain.db.x("UPDATE threads SET imported_from=?, updated_at=? WHERE id=?", (key, cand["last_ts"], tid))
+    _arrive_read(brain, tid)
     brain.ir.log("import", thread=tid, source=key, items=len(items))
     return brain.thread_view(brain.thread(tid))

@@ -133,6 +133,14 @@ class SubmitReq(BaseModel):
     sbatch_args: list[str] = []
 
 
+class SeenReq(BaseModel):
+    through_seq: int | None = None  # the last event the owner was shown; later replies stay unread
+
+
+# What the home, inbox and threads lists show changes only on these; tool calls and streamed text do not.
+LIST_EVENTS = ("turn.started", "turn.ended", "approval.", "job.", "listen.", "wait.", "provider.status", "system.notice")
+
+
 def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -283,6 +291,13 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             raise HTTPException(404, "no such thread")
         return brain.thread_view(t)
 
+    @app.post("/v1/threads/{tid}/seen")
+    def thread_seen(tid: str, b: SeenReq | None = None, device: str = Depends(auth)) -> dict:
+        try:
+            return {"seen_at": brain.mark_seen(tid, b.through_seq if b else None)}
+        except KeyError:
+            raise HTTPException(404, "no such thread")
+
     @app.patch("/v1/threads/{tid}")
     def patch_thread(tid: str, b: PatchThread, device: str = Depends(auth)) -> dict:
         if not brain.thread(tid):
@@ -345,6 +360,14 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             return await brain.rate_listening(lid, b.ratings, device)
         except KeyError:
             raise HTTPException(404, "no such listening test")
+
+    @app.post("/v1/listening/{lid}/skip")
+    def listening_skip(lid: str, device: str = Depends(auth)) -> dict:
+        try:
+            brain.skip_listening(lid)
+        except KeyError:
+            raise HTTPException(404, "no such listening test")
+        return {"ok": True}
 
     @app.get("/v1/threads/{tid}/files")
     def thread_files(tid: str, root: str = "worktree", path: str = "", device: str = Depends(auth)) -> dict:
@@ -622,6 +645,8 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
         await sock.accept()
         subs: dict[str, asyncio.Queue] = {}
         pumps: dict[str, asyncio.Task] = {}
+        every: asyncio.Queue | None = None  # subscribe_all
+        every_task: asyncio.Task | None = None
 
         async def pump(thread_id: str, q: asyncio.Queue, after: int) -> None:
             last = after
@@ -648,6 +673,18 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
                     q = brain.events.subscribe(tid)
                     subs[tid] = q
                     pumps[tid] = asyncio.create_task(pump(tid, q, int(msg.get("after_seq", 0))))
+                elif op == "subscribe_all" and every is None:
+                    # lists learn that something they show changed somewhere and refetch; no payloads
+                    every = brain.events.subscribe(None)
+
+                    async def announce(q: asyncio.Queue) -> None:
+                        while True:
+                            ev = await q.get()
+                            if ev["type"].startswith(LIST_EVENTS):
+                                await sock.send_json({"op": "changed", "thread_id": ev["thread_id"], "seq": ev["seq"],
+                                                      "type": ev["type"]})
+
+                    every_task = asyncio.create_task(announce(every))
                 elif op == "unsubscribe":
                     tid = msg.get("thread_id", "")
                     if tid in pumps:
@@ -659,6 +696,9 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             for tid, task in pumps.items():
                 task.cancel()
                 brain.events.unsubscribe(tid, subs[tid])
+            if every is not None:
+                every_task.cancel()
+                brain.events.unsubscribe(None, every)
 
     _mount_pwa(app, brain)
     return app

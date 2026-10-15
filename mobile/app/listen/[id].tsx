@@ -133,7 +133,14 @@ export default function ListenScreen() {
         title={test.title}
         subtitle={revealed ? 'results' : `blind · ${rated}/${test.items.length} rated`}
         surface={colors.ground}
-        right={<Button label="Thread" compact onPress={() => router.push(`/thread/${encodeURIComponent(test.thread_id)}`)} />}
+        right={
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {test.state === 'pending' && !revealed ? (
+              <Button label="Skip" compact onPress={() => api.skipListening(id).then(() => router.back(), (e) => setErr(describeError(e)))} />
+            ) : null}
+            <Button label="Thread" compact onPress={() => router.push(`/thread/${encodeURIComponent(test.thread_id)}`)} />
+          </View>
+        }
       />
       {!AUDIO_SUPPORTED ? <EmptyNote>Audio plays in the web app for now. Open Brain&apos;s link in Chrome.</EmptyNote> : null}
       <FlatList
