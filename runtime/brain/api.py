@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket,
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import __version__
+from . import __version__, importer
 from .core import Brain
 from .identity import AuthError, PendingApproval, host_of
 
@@ -75,6 +75,11 @@ class ForkReq(BaseModel):
 
 
 MAX_UPLOAD = 25 * 1024 * 1024
+
+
+class ImportReq(BaseModel):
+    provider: str
+    session_id: str
 
 
 class ListenReq(BaseModel):
@@ -422,6 +427,17 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
     def search(q: str, device: str = Depends(auth)) -> list[dict]:
         return brain.events.search(q)
 
+    @app.get("/v1/imports")
+    def imports(device: str = Depends(auth)) -> list[dict]:
+        return importer.candidates(brain)
+
+    @app.post("/v1/imports")
+    def do_import(b: ImportReq, device: str = Depends(auth)) -> dict:
+        try:
+            return importer.import_session(brain, b.provider, b.session_id)
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+
     @app.get("/v1/pending")
     def pending(since: float | None = None, device: str = Depends(auth)) -> dict:
         return brain.pending(since)
@@ -529,6 +545,22 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
     @app.post("/internal/endpoint")
     def internal_endpoint(body: dict, _: None = Depends(admin_auth)) -> dict:
         return {"pushed_to": brain.set_endpoint(body["endpoint"], body.get("alternates"))}
+
+    @app.post("/internal/imports")
+    def internal_imports(body: dict, _: None = Depends(admin_auth)) -> object:
+        if body.get("configure"):
+            brain.settings.raw["import"] = {**(brain.settings.raw.get("import") or {}), **body["configure"]}
+            brain.settings.save(brain.p)
+            return importer.config(brain.settings)
+        if body.get("list"):
+            return importer.candidates(brain)
+        if body.get("all"):
+            return [importer.import_session(brain, c["provider"], c["session_id"]) for c in importer.candidates(brain)
+                    if not c["thread_id"]]
+        try:
+            return importer.import_session(brain, body["provider"], body["session_id"])
+        except KeyError as e:
+            raise HTTPException(404, str(e))
 
     @app.post("/internal/devices")
     def internal_devices(body: dict, _: None = Depends(admin_auth)) -> list[dict]:

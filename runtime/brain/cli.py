@@ -284,6 +284,36 @@ def cmd_endpoint(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import(a: argparse.Namespace) -> int:
+    if not _brain_running():
+        print("Start Brain first (`brain serve`); import runs inside it.")
+        return 1
+    conf = {k: v for k, v in {"root": a.root and str(Path(a.root).expanduser().resolve()),
+                              "claude_dirs": a.claude_dir, "codex_dirs": a.codex_dir, "days": a.days}.items() if v}
+    if conf:
+        code, res = _internal("/internal/imports", {"configure": conf})
+        if code != 200:
+            print(f"failed: {res}")
+            return 1
+    if a.session:
+        code, res = _internal("/internal/imports", {"provider": a.provider, "session_id": a.session})
+        print(f"imported as thread {res['id']}: {res['title']}" if code == 200 else f"failed: {res}")
+        return 0 if code == 200 else 1
+    code, res = _internal("/internal/imports", {"all": True} if a.all else {"list": True})
+    if code != 200:
+        print(f"failed: {res}")
+        return 1
+    for c in res:
+        if a.all:
+            print(f"imported {c['id']}: {c['title']}")
+        else:
+            state = f"thread {c['thread_id']}" if c["thread_id"] else ("open in a terminal" if c["live"] else "not imported")
+            print(f"{c['provider']:6} {c['session_id']}  {Path(c['repo_path']).name:20} {c['title'][:50]:50} {state}")
+    if not res:
+        print("No importable sessions. Set the folder with --root and the profiles with --claude-dir / --codex-dir.")
+    return 0
+
+
 def cmd_doctor(a: argparse.Namespace) -> int:
     p = paths()
     probs = check_permissions(p)
@@ -359,6 +389,17 @@ def main(argv: list[str] | None = None) -> int:
     ep.add_argument("url")
     ep.add_argument("--alt", nargs="*", help="failover relay URLs (replaces the current list)")
     ep.set_defaults(fn=cmd_endpoint)
+
+    im = sub.add_parser("import", help="list or import your terminal Claude/Codex sessions as threads")
+    im.add_argument("session", nargs="?", help="session id to import (see --list)")
+    im.add_argument("--provider", default="claude", choices=["claude", "codex"])
+    im.add_argument("--list", action="store_true")
+    im.add_argument("--all", action="store_true", help="import every listed session not imported yet")
+    im.add_argument("--root", help="only sessions whose folder is under this (yours)")
+    im.add_argument("--claude-dir", action="append", help="a Claude profile folder, e.g. ~/.claude-profiles/you")
+    im.add_argument("--codex-dir", action="append", help="a Codex home, e.g. ~/.codex")
+    im.add_argument("--days", type=float)
+    im.set_defaults(fn=cmd_import)
 
     sub.add_parser("doctor", help="check permissions, lease, configuration").set_defaults(fn=cmd_doctor)
     ir = sub.add_parser("ir-dump", help="print the incident-response log for an admin")

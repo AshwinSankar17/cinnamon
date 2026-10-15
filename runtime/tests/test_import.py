@@ -190,3 +190,18 @@ async def test_the_first_phone_message_hydrates_the_recent_part_then_runs(owner,
     assert fake.hydrated == [items[cut:]]
     assert fake.prompts[-1] == "what was the last step?"
     assert hashlib.sha256(src.read_bytes()).hexdigest() == before
+
+
+def test_api_lists_and_imports(owner, brain):
+    from fastapi.testclient import TestClient
+    from brain.api import create_app
+    _claude_session(owner["profile"], owner["repo"], "s6", title="From the phone")
+    with TestClient(create_app(brain, dev_no_auth=True)) as c:
+        lst = c.get("/v1/imports").json()
+        assert [(x["session_id"], x["thread_id"]) for x in lst] == [("s6", None)]
+        brain.providers["claude"] = brain.providers["fake"]  # the API imports as the session's own provider
+        t = c.post("/v1/imports", json={"provider": "claude", "session_id": "s6"}).json()
+        assert t["title"] == "From the phone"
+        assert c.post("/v1/imports", json={"provider": "claude", "session_id": "nope"}).status_code == 404
+        r = c.post("/internal/imports", json={"configure": {"days": 7}}, headers={"X-Brain-Admin-Token": brain.admin_token})
+        assert r.status_code == 200 and brain.settings.raw["import"]["days"] == 7
