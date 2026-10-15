@@ -31,7 +31,9 @@ export const EDGE: Record<WorldId, [number, number]> = {
 export function frameFor(world: WorldId, w: number, h: number, top: number, bottom: number): Frame {
   const b = BAND[world];
   const fit = Math.max(0.1, bottom - top) / (b.bottom - b.top);
-  const s = Math.min(fit, w / (b.right - b.left), Math.max(w / 390, h / 844));
+  // never larger than covering the screen, nor more than 10% past fitting its height (a wide desktop column would
+  // otherwise zoom a world with a short content band, like the forest, and crop its tree)
+  const s = Math.min(fit, w / (b.right - b.left), Math.max(w / 390, h / 844), (h / 844) * 1.1);
   const ox = (w - 390 * s) / 2;
   // Any oy in [lo, hi] keeps the content inside the free space (top below the header, bottom above the tray); within
   // it, prefer an oy that leaves no backdrop uncovered (h - 844s <= oy <= 0), nearest the content's centred position.
