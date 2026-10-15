@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket,
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import __version__, importer
+from . import __version__, importer, quota
 from .core import Brain
 from .identity import AuthError, PendingApproval, host_of
 
@@ -433,6 +433,10 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             return brain.activity(tid, left_at)
         except KeyError:
             raise HTTPException(404, "no such thread")
+
+    @app.get("/v1/quota")
+    def get_quota(refresh: int = 0, device: str = Depends(auth)) -> dict:
+        return quota.snapshot(brain, force=bool(refresh))
 
     @app.get("/v1/imports")
     def imports(device: str = Depends(auth)) -> list[dict]:
