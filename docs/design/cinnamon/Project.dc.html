@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cinnamon · Project</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400..700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pj{--bg:#F3EDE4;--bg2:#EBE2D6;--raise:#FBF8F3;--ink:#1D1510;--ink2:#5C4B3F;--ink3:#7E6A5A;--line:rgba(29,21,16,.11);--bark:#B97E52;--fresh:#8F3A17;--ember:#D9581F;--needs:#D99418;--needsInk:#7A4F00;--finding:#4B6332;--glow:rgba(233,170,110,.30)}
+.pj.dark{--bg:#120D0A;--bg2:#1B1410;--raise:#1F1813;--ink:#F3E7D7;--ink2:#BCA996;--ink3:#97836F;--line:rgba(243,231,215,.12);--bark:#6B4A35;--fresh:#E9AE72;--ember:#FF8A4C;--needs:#F4B63F;--needsInk:#F4B63F;--finding:#A9C27A;--glow:rgba(240,117,58,.22)}
+.pj *{box-sizing:border-box}
+.pj button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pj button:focus-visible{outline:2px solid var(--fresh);outline-offset:2px;border-radius:12px}
+.dsp{font-family:'Instrument Serif',serif;font-weight:400;letter-spacing:-0.5px}
+.mono{font-family:'Geist Mono',monospace;font-variant-numeric:tabular-nums}
+.press{transition:transform .1s cubic-bezier(.23,1,.32,1)}
+.press:active{transform:scale(.97)}
+.rise{animation:pjRise .6s cubic-bezier(.23,1,.32,1) both}
+@keyframes pjRise{from{opacity:0;transform:translateY(10px)}}
+.bead{transition:transform .25s cubic-bezier(.23,1,.32,1)}
+.bead.sel{transform:scale(1.35)}
+.strand{stroke-dasharray:1;stroke-dashoffset:1;animation:pjDraw 1.1s cubic-bezier(.23,1,.32,1) .2s forwards}
+@keyframes pjDraw{to{stroke-dashoffset:0}}
+.chip{font-size:11px;font-weight:600;border-radius:999px;padding:3px 9px;flex:none;white-space:nowrap}
+.scrim{position:absolute;inset:0;background:rgba(10,6,4,.4);opacity:0;pointer-events:none;transition:opacity .42s cubic-bezier(.32,.72,0,1)}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--raise);border-radius:30px 30px 0 0;transform:translateY(104%);transition:transform .5s cubic-bezier(.32,.72,0,1);box-shadow:0 -10px 30px rgba(10,6,4,.10)}
+.sheet.on{transform:none}
+.trail{position:relative;padding-left:26px}
+.trail::before{content:"";position:absolute;left:8px;top:8px;bottom:8px;width:2px;background:var(--line)}
+.dot{position:absolute;left:3px;top:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--raise)}
+.sheet.on .tstep{animation:pjRise .5s cubic-bezier(.23,1,.32,1) both}
+@media (prefers-reduced-motion:reduce){.rise,.strand,.sheet.on .tstep{animation:none;stroke-dashoffset:0}.sheet,.scrim{transition-duration:.15s}}
+</style>
+</helmet>
+<div class="pj {{rootCls}}" style="width: 390px; height: 844px; position: relative; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Geist', system-ui, sans-serif">
+<div style="position: absolute; width: 520px; height: 520px; left: -60px; top: -170px; border-radius: 50%; background: radial-gradient(circle, var(--glow) 0%, rgba(0,0,0,0) 66%)"></div>
+
+<div style="position: absolute; left: 10px; right: 16px; top: 12px; height: 44px; display: flex; align-items: center; gap: 4px">
+<button class="press" aria-label="Back to standup" style="width: 40px; height: 44px; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
+<span class="mono" style="font-size: 11px; color: var(--ink3); flex: 1">STANDUP</span>
+<span class="mono" style="font-size: 11px; color: var(--ink3)">vault 226 GB</span>
+</div>
+
+<div class="rise" style="position: absolute; left: 18px; right: 18px; top: 62px; display: flex; flex-direction: column; gap: 4px">
+<h1 class="dsp" style="margin: 0; font-size: 40px; line-height: 42px">EDIT TTS</h1>
+<span style="font-size: 13.5px; color: var(--ink2)">Edit-flow TTS on Gemma tokens · one repo, one vault, four threads</span>
+</div>
+
+<div class="rise" style="position: absolute; left: 14px; right: 14px; top: 146px; background: var(--raise); border: 1px solid var(--line); border-radius: 24px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 10px; animation-delay: .06s; box-shadow: 0 10px 24px -16px rgba(10,6,4,.3)">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="stroke: var(--fresh)"><path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8"></path></svg>
+<span style="display: flex; flex-direction: column; flex: 1"><span style="font-weight: 600; font-size: 16px">Repo session</span><span style="font-size: 12px; color: var(--ink2)">The only agent that edits code · idle</span></span>
+<span class="chip" style="background: var(--bg2); color: var(--ink2)">Claude</span>
+</div>
+<svg width="334" height="74" viewBox="0 0 334 74" role="img" aria-label="Nine frozen code versions from Thu 8 to Mon 12, with the threads that run on them">
+<path class="strand" pathLength="1" d="M12 26 L322 26" fill="none" stroke-width="3" stroke-linecap="round" style="stroke: var(--bark)"></path>
+<sc-for list="{{vers}}" as="v" hint-placeholder-count="9">
+<g style="transform: translate({{v.x}}px, 26px)"><circle class="bead {{v.cls}}" r="{{v.r}}" style="fill: {{v.fill}}; stroke: var(--raise); stroke-width: 2"></circle></g>
+<text x="{{v.x}}" y="10" text-anchor="middle" class="mono" style="font-size: 8.5px; fill: var(--ink3)">{{v.label}}</text>
+</sc-for>
+<sc-for list="{{lanes}}" as="l" hint-placeholder-count="3">
+<path d="{{l.d}}" fill="none" stroke-width="1.5" stroke-linecap="round" style="stroke: {{l.c}}"></path>
+<text x="{{l.tx}}" y="{{l.ty}}" text-anchor="{{l.a}}" style="font-size: 10px; font-weight: 600; fill: {{l.c}}">{{l.name}}</text>
+</sc-for>
+</svg>
+<sc-for list="{{vers}}" as="v" hint-placeholder-count="9"><button onClick="{{v.pick}}" aria-label="{{v.aria}}" style="position: absolute; left: {{v.bx}}px; top: 64px; width: 32px; height: 40px"></button></sc-for>
+<div style="display: flex; flex-direction: column; gap: 2px; min-height: 38px; border-top: 1px solid var(--line); padding-top: 8px">
+<span class="mono" style="font-size: 10.5px; color: var(--ink3)">{{verMeta}}</span>
+<span style="font-size: 13px; line-height: 17px">{{verText}}</span>
+</div>
+<button class="press" onClick="{{openReq}}" style="display: flex; align-items: center; gap: 10px; text-align: left; min-height: 46px; border-radius: 14px; background: var(--bg2); padding: 6px 10px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg>
+<span style="flex: 1; display: flex; flex-direction: column"><span style="font-size: 13.5px; font-weight: 600">Change request from Refinement study</span><span style="font-size: 11.5px; color: var(--ink2)">accepted · shipped as v9</span></span>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="opacity: .45"><path d="M9 5l7 7-7 7"></path></svg>
+</button>
+</div>
+
+<div style="position: absolute; left: 14px; right: 14px; top: 428px; display: flex; flex-direction: column">
+<span class="mono" style="font-size: 10.5px; letter-spacing: .5px; color: var(--ink3); padding: 0 4px 6px">THREADS · EACH ON FROZEN CODE</span>
+<sc-for list="{{threads}}" as="t" hint-placeholder-count="4">
+<div class="rise" style="display: flex; gap: 12px; padding: 8px 4px; border-top: 1px solid var(--line); animation-delay: {{t.dl}}s">
+<svg width="22" height="40" viewBox="0 0 22 40" aria-hidden="true" style="flex: none"><path d="{{t.rib}}" style="fill: {{t.c}}"></path></svg>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 600; font-size: 15px; flex: 1">{{t.name}}</span><span class="chip" style="{{t.chipStyle}}">{{t.state}}</span></span>
+<span style="font-size: 12.5px; color: var(--ink2); line-height: 17px">{{t.line}}</span>
+<span class="mono" style="font-size: 10.5px; color: {{t.mc}}">{{t.meta}}</span>
+</span>
+</div>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 12px; right: 12px; bottom: 18px; height: 58px; display: flex; gap: 8px">
+<button class="press" aria-label="Open menu" style="width: 58px; height: 58px; border-radius: 50%; background: var(--raise); border: 1px solid var(--line); display: grid; place-items: center; flex: none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8h16M4 16h16"></path></svg></button>
+<div style="flex: 1; border-radius: 999px; background: var(--raise); border: 1px solid var(--line); display: flex; align-items: center; padding: 0 8px 0 20px; gap: 10px">
+<span style="flex: 1; font-size: 15px; color: var(--ink3)">Ask the repo session…</span>
+<span style="width: 42px; height: 42px; border-radius: 50%; background: var(--ink); display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="stroke: var(--bg)"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></span>
+</div>
+</div>
+
+<div class="scrim {{reqCls}}" onClick="{{closeReq}}"></div>
+<div class="sheet {{reqCls}}" role="dialog" aria-label="Change request" style="padding: 10px 18px 26px; display: flex; flex-direction: column; gap: 12px">
+<div style="width: 40px; height: 5px; border-radius: 3px; background: var(--line); align-self: center"></div>
+<div style="display: flex; align-items: center; gap: 8px">
+<span class="dsp" style="font-size: 27px; flex: 1">Change request</span>
+<button onClick="{{closeReq}}" style="min-height: 44px; padding: 0 8px; font-weight: 600; font-size: 14px">Done</button>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 21px">“The on-policy arm failed four times at 200k. On-policy batches must count cond + source + target tokens against the batch budget.”</p>
+<div class="trail" style="display: flex; flex-direction: column; gap: 14px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+<div class="tstep" style="position: relative; display: flex; flex-direction: column; gap: 1px; animation-delay: {{s.dl}}s"><span class="dot" style="left: -23px; background: {{s.c}}"></span><span style="font-size: 14px; font-weight: 600">{{s.t}}</span><span style="font-size: 12.5px; color: var(--ink2); line-height: 17px">{{s.d}}</span></div>
+</sc-for>
+</div>
+<span style="font-size: 11.5px; line-height: 16px; color: var(--ink3)">The thread never touched the code. It asked; the repo session decided, made the change and froze a new version.</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["light","dark"],"default":"light"},"request":{"editor":"enum","options":["closed","open"],"default":"closed"},"$preview":{"width":390,"height":844}}'>
+// Nine snapshots the EDIT TTS agent froze by hand in vault/edit-tts/code/ (commit, date, subject).
+const VERS=[['round1','41be262','Thu 8 09:13','Ordered reveal (codebook + time), c0-only births, settle fix'],['round2','996712a','Thu 8 09:25','Vectorise plan_bridge/materialize: ~380 ms to 0.13 ms per utterance'],['round3','ce90c8e','Thu 8 10:43','Uniform full-codebook reveal by default; orderings become ablations'],['round3b','76b7733','Thu 8 11:28','Per-task batch-budget probe (peak memory per task)'],['round3c','ff13227','Thu 8 15:45','Pack batches on materialised sequence length'],['round3d','75eb5c7','Fri 9 14:11','Eval loop: CER, PESQ-WB and NISQA-TTS MOS'],['round3e','47ef99c','Fri 9 18:49','Same-speaker prompts and GigaSpeech text normalisation'],['round3f','a07cbf7','Mon 12 11:14','On-policy data: rollout metadata opaque to default_convert'],['round3g','f1a01a6','Mon 12 11:18','On-policy batches: admit examples while B·(cond+source+target) fits']];
+const X=(i)=>18+i*37;
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { v: 8, req: null }; }
+  renderVals() {
+    const st = this.state, dark = (this.props.mode || 'light') === 'dark';
+    const req = st.req !== null ? st.req : this.props.request === 'open';
+    const lanesDef = [[4, 'V3 full run', 'var(--ink3)'], [6, 'Branch B', 'var(--finding)'], [8, 'Refinement', 'var(--ember)']];
+    const vers = VERS.map(([n, c, d, s], i) => ({ x: X(i), bx: X(i) - 2, label: 'v' + (i + 1), r: i === st.v ? 7 : 5.5, cls: i === st.v ? 'sel' : '',
+      fill: lanesDef.some((l) => l[0] === i) ? 'var(--fresh)' : 'var(--bark)', aria: 'Code v' + (i + 1) + ', ' + n + ', ' + s, pick: () => this.setState({ v: i }) }));
+    const lanes = lanesDef.map(([i, name, c], k) => { const x = X(i), y = 44 + k * 11; return { d: 'M' + x + ' 33 L' + x + ' ' + (y - 3), c, name, tx: x - 5, ty: y + 1, a: 'end' }; });
+    const [n, c, d, s] = VERS[st.v];
+    const rib = (seed) => { let L = '', R = ''; for (let i = 0; i <= 10; i++) { const y = 2 + i * 3.6, x = 11 + Math.sin(i * .7 + seed) * 4, w = 1.5 + Math.abs(Math.sin(i * 1.3 + seed)) * 3.2; L += (i ? ' L' : 'M') + (x - w).toFixed(1) + ' ' + y.toFixed(1); R = ' L' + (x + w).toFixed(1) + ' ' + y.toFixed(1) + R; } return L + R + ' Z'; };
+    const threads = [
+      { name: 'Refinement study', state: 'needs you', chipStyle: 'background: var(--needs); color: #1A120D', line: 'Both arms evaluated at 210k; a listening test waits.', meta: 'v9 · control 3.38% / NISQA 3.89 · on-policy 3.64% / 3.75', mc: 'var(--finding)', c: 'var(--fresh)', rib: rib(1), dl: .12 },
+      { name: 'Branch B · 200k', state: 'done', chipStyle: 'background: var(--bg2); color: var(--ink2)', line: 'Best V3 so far; the study starts from it.', meta: 'v7 · TTS WER 3.13% · tuned 2.58% · NISQA 3.94', mc: 'var(--finding)', c: 'var(--bark)', rib: rib(2), dl: .18 },
+      { name: 'V3 full run', state: 'done', chipStyle: 'background: var(--bg2); color: var(--ink2)', line: '8×H100 to 50k, then resumed as Branch B.', meta: 'v5 · 5 runs cancelled, superseded', mc: 'var(--ink3)', c: 'var(--bark)', rib: rib(3), dl: .24 },
+      { name: 'V2 grid model', state: 'archived', chipStyle: 'background: var(--bg2); color: var(--ink3)', line: 'Ran on the live checkout, before freezing.', meta: 'no version · Tue 6 – Wed 7', mc: 'var(--ink3)', c: 'var(--line)', rib: rib(4), dl: .3 },
+    ];
+    const steps = [
+      { t: 'Asked by Refinement study', d: 'After four failed on-policy jobs. The thread stayed on v8 and kept the control arm running.', c: 'var(--needs)', dl: .1 },
+      { t: 'Repo session accepted', d: '“Worth it: the arm cannot run without it; the control arm is unaffected.”', c: 'var(--fresh)', dl: .18 },
+      { t: 'Committed f1a01a6, froze v9 (round3g)', d: 'Mon 12 11:18 · checked out read-only under vault/edit-tts/code/', c: 'var(--fresh)', dl: .26 },
+      { t: 'Refinement study moved to v9', d: '“The on-policy arm needs the batch fix; results from v8 stay labelled v8.”', c: 'var(--finding)', dl: .34 },
+    ];
+    return { rootCls: dark ? 'dark' : '', vers, lanes, threads, steps,
+      verMeta: 'v' + (st.v + 1) + ' · ' + n + ' · ' + c + ' · ' + d, verText: s,
+      reqCls: req ? 'on' : '', openReq: () => this.setState({ req: true }), closeReq: () => this.setState({ req: false }) };
+  }
+}
+</script>
+</body>
+</html>

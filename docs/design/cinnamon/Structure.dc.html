@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cinnamon · Structure</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400..700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.st{--ink:#1D1510;--ink2:#5C4B3F;--ink3:#7E6A5A;--line:rgba(29,21,16,.12);--bark:#B97E52;--fresh:#8F3A17;--needs:#D99418;--finding:#4B6332;--raise:#FFFFFF}
+.lab{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.6px;color:var(--ink3)}
+.box{box-sizing:border-box;position:absolute;background:var(--raise);border:1px solid var(--line);border-radius:22px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;box-shadow:0 14px 30px -22px rgba(29,21,16,.35)}
+.h{font-family:'Instrument Serif',serif;font-size:30px;line-height:32px;letter-spacing:-0.5px}
+.p{font-size:13.5px;line-height:19px;color:var(--ink2);margin:0}
+.tree{font-family:'Geist Mono',monospace;font-size:12px;line-height:21px;color:var(--ink);white-space:pre;margin:0}
+.tree em{font-style:normal;color:var(--ink3)}
+.lane{display:flex;flex-direction:column;gap:5px;padding:10px 0;border-top:1px solid var(--line)}
+.acts{display:flex;gap:5px;flex-wrap:wrap}
+.act{font-size:11.5px;border-radius:999px;padding:3px 9px;background:#F3EDE4;color:var(--ink2)}
+.tbl{display:grid;grid-template-columns:130px 520px 1fr;font-size:13px;line-height:18px}
+.tbl>span{padding:8px 16px 8px 0;border-top:1px solid var(--line)}
+.tbl .th{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.5px;color:var(--ink3);border-top:0}
+.tk{font-weight:600}
+.ta{color:var(--ink2)}
+</style>
+</helmet>
+<div class="st" style="width: 1280px; height: 960px; position: relative; background: #FBF8F3; color: var(--ink); font-family: 'Geist', system-ui, sans-serif; overflow: hidden">
+<div style="position: absolute; left: 48px; top: 40px; right: 48px; display: flex; align-items: flex-end; gap: 40px">
+<h2 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 54px; line-height: 54px; letter-spacing: -1.4px; width: 620px">One repo session. Threads on frozen code. Artifacts in the vault.</h2>
+<p class="p" style="max-width: 520px; padding-bottom: 4px">Your model, drawn with EDIT TTS. So far its agent has made 80 commits on one branch, 23 of them eval-wrapper scripts, and has frozen code by hand nine times in <span style="font-family: 'Geist Mono', monospace; font-size: 12px">vault/edit-tts/code/</span>. Cinnamon makes that discipline the structure.</p>
+</div>
+
+
+<div class="box" style="left: 48px; top: 196px; width: 344px; height: 410px">
+<span class="lab">REPO · CODE</span>
+<span class="h">Repo session</span>
+<p class="p">The only agent that edits the source. It reads change requests, decides whether each is worth it and how, commits, and freezes a new code version. It commits inside the repo without asking; pushes and protected branches still ask you.</p>
+<svg width="300" height="54" viewBox="0 0 300 54" aria-label="Nine code versions">
+<path d="M8 22 L292 22" stroke="#B97E52" stroke-width="3" stroke-linecap="round"></path>
+<sc-for list="{{vers}}" as="v" hint-placeholder-count="9"><circle cx="{{v.x}}" cy="22" r="{{v.r}}" fill="{{v.f}}" stroke="#fff" stroke-width="2"></circle><text x="{{v.x}}" y="46" text-anchor="middle" style="font-family: 'Geist Mono', monospace; font-size: 9px; fill: #7E6A5A">{{v.l}}</text></sc-for>
+</svg>
+<p class="p" style="font-size: 12.5px">v1 round1 · 41be262 · Thu 8 09:13 … v9 round3g · f1a01a6 · Mon 12 11:18. The real snapshots, now first-class versions with a changelog.</p>
+</div>
+
+<div class="box" style="left: 468px; top: 196px; width: 380px; height: 410px; gap: 4px">
+<span class="lab">THREADS · WORK</span>
+<span class="h" style="margin-bottom: 4px">Long-lived, on frozen code</span>
+<sc-for list="{{lanes}}" as="l" hint-placeholder-count="3">
+<div class="lane">
+<div style="display: flex; align-items: baseline; gap: 8px"><span style="font-weight: 600; font-size: 14.5px; flex: 1">{{l.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: {{l.c}}">on {{l.v}}</span></div>
+<div class="acts"><sc-for list="{{l.acts}}" as="a" hint-placeholder-count="4"><span class="act">{{a}}</span></sc-for></div>
+</div>
+</sc-for>
+<p class="p" style="font-size: 12.5px; margin-top: 4px">A thread never edits code. When it needs a change it asks the repo session, so a running study never switches into a code session.</p>
+</div>
+
+<div class="box" style="left: 906px; top: 196px; width: 326px; height: 410px">
+<span class="lab">VAULT · ARTIFACTS</span>
+<span class="h">One folder per project</span>
+<pre class="tree">vault/edit-tts/
+├─ code/
+│  └─ v9-round3g/   <em>read-only</em>
+├─ threads/
+│  └─ refinement-study/
+│     ├─ configs/   <em>eval scripts</em>
+│     ├─ runs/
+│     │  └─ v3_onpolicy_b200k/
+│     │     <em>ckpt · log · eval_210000</em>
+│     └─ listen/
+└─ shared/   <em>hf · envs · tools</em></pre>
+</div>
+
+<svg width="1280" height="960" viewBox="0 0 1280 960" aria-hidden="true" style="position: absolute; inset: 0; pointer-events: none">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5C4B3F"></path></marker></defs>
+<path d="M468 268 C 440 268, 420 262, 392 262" fill="none" stroke="#D99418" stroke-width="2" marker-end="url(#ah)"></path>
+<text x="430" y="252" text-anchor="middle" style="font-family: 'Geist', sans-serif; font-size: 12px; font-weight: 600; fill: #7A4F00">change request</text>
+<path d="M392 352 C 420 352, 440 358, 468 358" fill="none" stroke="#8F3A17" stroke-width="2" marker-end="url(#ah)"></path>
+<text x="430" y="378" text-anchor="middle" style="font-family: 'Geist', sans-serif; font-size: 12px; font-weight: 600; fill: #8F3A17">new version</text>
+<path d="M848 330 C 872 330, 884 330, 906 330" fill="none" stroke="#4B6332" stroke-width="2" marker-end="url(#ah)"></path>
+<text x="877" y="316" text-anchor="middle" style="font-family: 'Geist', sans-serif; font-size: 12px; font-weight: 600; fill: #4B6332">outputs</text>
+<path d="M906 230 C 700 170, 420 170, 300 196" fill="none" stroke="#B97E52" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ah)"></path>
+<text x="610" y="164" text-anchor="middle" style="font-family: 'Geist', sans-serif; font-size: 12px; font-weight: 600; fill: #7E6A5A">each version is checked out read-only into the vault</text>
+</svg>
+
+<div style="position: absolute; left: 48px; right: 48px; top: 640px">
+<div class="tbl"><span class="th"></span><span class="th">TODAY</span><span class="th">CINNAMON</span>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="5"><span class="tk">{{r.k}}</span><span class="ta">{{r.a}}</span><span class="tb">{{r.b}}</span></sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const used = { 4: 1, 6: 1, 8: 1 };
+    const vers = Array.from({ length: 9 }, (_, i) => ({ x: 14 + i * 34, r: used[i] ? 7 : 5, f: used[i] ? '#8F3A17' : '#B97E52', l: 'v' + (i + 1) }));
+    const lanes = [
+      { name: 'Refinement study', v: 'v9', c: '#8F3A17', acts: ['train on-policy arm', 'train control arm', 'eval 210k × 2', 'listen V3 vs V1'] },
+      { name: 'Branch B · 200k', v: 'v7', c: '#4B6332', acts: ['train 50k → 200k', '15 evals', '2 sampler sweeps'] },
+      { name: 'V3 full run', v: 'v5', c: '#7E6A5A', acts: ['probe memory', 'train 8×H100', '4 evals'] },
+    ];
+    const rows = [
+      { k: 'Vault', a: 'Two meanings: the repo’s vault folder, and a “run vault” subfolder only for threads created as training runs.', b: 'One folder per project. Every thread gets its own subfolder.' },
+      { k: 'Thread', a: 'Read-only, own branch, or training run, picked once at creation. Read-only threads use the live checkout, so code can change under a running job.', b: 'A long-lived workstream of actions (train, eval, listen) pinned to one frozen code version.' },
+      { k: 'Code changes', a: 'Any thread commits to its own branch; eval wrappers and configs land in git.', b: 'Only the repo session edits code. Threads file change requests; configs live in the thread’s vault folder.' },
+      { k: 'Job outputs', a: 'Jobs from ordinary threads write runs/run_<hex> into the shared runs/ folder (86 of 107 entries).', b: 'threads/<thread>/runs/<label>-<id>, linked from the job card.' },
+      { k: 'Provenance', a: 'Not recorded.', b: 'Every job records its code version; results stay labelled with it.' },
+    ];
+    return { vers, lanes, rows };
+  }
+}
+</script>
+</body>
+</html>
