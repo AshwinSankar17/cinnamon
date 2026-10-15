@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { Icon } from '@/components/Icon';
 import { ACTIVE, JobRow, jobColor } from '@/components/JobRow';
-import { Dot, EmptyNote, Mono, TabHeader } from '@/components/ui';
+import { Dot, EmptyNote, Mono, BackHeader } from '@/components/ui';
 import { api } from '@/src/api';
 import { ago } from '@/src/format';
 import { useRemote } from '@/src/hooks';
@@ -38,7 +38,9 @@ export default function RunsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>
-      <TabHeader title="Runs" />
+      <BackHeader
+        title="Jobs"
+        surface={colors.ground} />
       <ConnectionBanner />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 8 }}

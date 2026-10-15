@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { ClusterChip, ConnectionBanner } from '@/components/ConnectionBanner';
 import { Icon } from '@/components/Icon';
 import { ACTIVE, JobRow, jobColor, jobLabel } from '@/components/JobRow';
-import { Button, Card, Dot, EmptyNote, IconButton, Mono, ProviderPill, SectionLabel, TabHeader } from '@/components/ui';
+import { Button, Card, Dot, EmptyNote, IconButton, Mono, ProviderPill, SectionLabel, BackHeader } from '@/components/ui';
 import { api, describeError } from '@/src/api';
 import { useConnection } from '@/src/connection';
 import { hhmm, sinceLabel, toMs, word } from '@/src/format';
@@ -92,8 +92,9 @@ export default function InboxScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>
-      <TabHeader
+      <BackHeader
         title="Inbox"
+        surface={colors.ground}
         right={
           <>
             <ClusterChip />

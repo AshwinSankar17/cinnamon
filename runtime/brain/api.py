@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket,
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import __version__, importer
+from . import __version__, importer, quota
 from .core import Brain
 from .identity import AuthError, PendingApproval, host_of
 
@@ -75,6 +75,11 @@ class ForkReq(BaseModel):
 
 
 MAX_UPLOAD = 25 * 1024 * 1024
+
+
+class SettingsPatch(BaseModel):
+    model_config = {"extra": "forbid"}
+    quiet_hours_enabled: bool
 
 
 class ImportReq(BaseModel):
@@ -426,6 +431,40 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
     @app.get("/v1/search")
     def search(q: str, device: str = Depends(auth)) -> list[dict]:
         return brain.events.search(q)
+
+    @app.get("/v1/threads/{tid}/activity")
+    def thread_activity(tid: str, left_at: float | None = None, device: str = Depends(auth)) -> dict:
+        try:
+            return brain.activity(tid, left_at)
+        except KeyError:
+            raise HTTPException(404, "no such thread")
+
+    @app.get("/v1/devices/self")
+    def device_self(device: str = Depends(auth)) -> dict:
+        d = brain.db.one("SELECT * FROM devices WHERE id=?", (device,))
+        if not d:
+            raise HTTPException(404, "unknown device")
+        others = brain.db.one("SELECT COUNT(*) AS n FROM devices WHERE revoked=1")["n"]
+        return {"id": d["id"], "name": d["name"], "created_at": d["created_at"], "last_seen": d["last_seen"],
+                "web_push": bool(d["web_push"]), "revoked_others": others}
+
+    @app.post("/v1/devices/self/revoke")
+    def device_self_revoke(device: str = Depends(auth)) -> dict:
+        brain.pairing.revoke(device)  # the phone also forgets its own key; this makes the old one useless here
+        brain.ir.log("device.signout", device=device)
+        return {"revoked": True}
+
+    @app.get("/v1/rules")
+    def get_rules(device: str = Depends(auth)) -> dict:
+        return brain.rules()
+
+    @app.patch("/v1/settings")
+    def patch_settings(b: SettingsPatch, device: str = Depends(auth)) -> dict:
+        return brain.set_quiet_hours(b.quiet_hours_enabled)
+
+    @app.get("/v1/quota")
+    def get_quota(refresh: int = 0, device: str = Depends(auth)) -> dict:
+        return quota.snapshot(brain, force=bool(refresh))
 
     @app.get("/v1/imports")
     def imports(device: str = Depends(auth)) -> list[dict]:

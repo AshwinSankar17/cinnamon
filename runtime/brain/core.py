@@ -900,6 +900,45 @@ class Brain:
                         "submitted_at": d["submitted_at"], "updated_at": d["updated_at"]})
         return out
 
+    def rules(self) -> dict:
+        """What Brain enforces (policy.py), in the owner's words, plus the one switch the phone may flip."""
+        return {"groups": [
+            {"head": "Brain asks you first", "items": [
+                {"text": "Writing outside the repo and its vault", "chip": "asks you"},
+                {"text": "Pushing to protected branches (main, master)", "chip": "asks you"},
+                {"text": "Deleting vaults or checkpoints", "chip": "asks you"},
+                {"text": "Global installs, git config, crontab", "chip": "asks you"}]},
+            {"head": "Never on the login node", "items": [
+                {"text": "Detached processes, tmux, sleep and squeue loops", "chip": "blocked"},
+                {"text": "Reading Brain's keys and tokens", "chip": "blocked"}]}],
+            "quiet_hours": self.quiet_hours()}
+
+    def quiet_hours(self) -> dict:
+        qh = [str(x) for x in self.settings.quiet_hours] + ["", ""]
+        return {"enabled": bool(self.settings.raw.get("quiet_hours_enabled", True)), "from": qh[0], "to": qh[1]}
+
+    def set_quiet_hours(self, enabled: bool) -> dict:
+        self.settings.raw["quiet_hours_enabled"] = bool(enabled)
+        self.settings.save(self.p)
+        return self.quiet_hours()
+
+    FAILED_JOB_STATES = ("FAILED", "TIMEOUT", "OUT_OF_MEMORY", "NODE_FAIL")
+
+    def activity(self, thread_id: str, left_at: float | None = None) -> dict:
+        """What the roll draws: when the agent worked (turns, weighted by output) and when jobs ran or failed."""
+        t = self.thread(thread_id)
+        if not t:
+            raise KeyError(thread_id)
+        n = now()
+        turns = [[r["started_at"], min(30.0, (r["output_tokens"] or 0) / 1000)] for r in
+                 self.db.q("SELECT started_at, output_tokens FROM turns WHERE thread_id=? ORDER BY started_at", (thread_id,))]
+        jobs = [[r["submitted_at"], r["updated_at"] if r["state"] in slurm.TERMINAL else n,
+                 1 if r["state"] in self.FAILED_JOB_STATES else 0]
+                for r in self.db.q("SELECT submitted_at, updated_at, state FROM jobs WHERE thread_id=? ORDER BY submitted_at",
+                                   (thread_id,))]
+        start = min([t["created_at"], *(x[0] for x in turns), *(j[0] for j in jobs)])
+        return {"start": start, "now": n, "turns": turns, "jobs": jobs, "left_at": left_at}
+
     def expire_threads(self) -> list[str]:
         """Archive threads idle longer than thread_ttl_days (0 = never). Pinned threads, threads that need the owner
         or are working, and threads with an open wait, a pending approval or listening test, or a job active within

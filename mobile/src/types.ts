@@ -257,3 +257,19 @@ export type ImportCandidate = {
   live: boolean;
   thread_id: string | null;
 };
+
+/** GET /v1/threads/{id}/activity: what the roll draws (src/roll.ts). */
+export type { Activity } from './roll';
+
+export type QuotaWindow = { name: string; used_pct: number | null; resets_at: number | null };
+export type QuotaProvider = { name: string; plan: string | null; windows: QuotaWindow[]; source: string; error: string | null };
+/** GET /v1/quota: what each provider itself reported; nothing estimated. */
+export type Quota = { as_of: number; providers: QuotaProvider[] };
+
+export type RuleItem = { text: string; chip: 'asks you' | 'blocked' };
+export type QuietHours = { enabled: boolean; from: string; to: string };
+/** GET /v1/rules: what Brain enforces, plus the quiet-hours switch. */
+export type Rules = { groups: { head: string; items: RuleItem[] }[]; quiet_hours: QuietHours };
+
+/** GET /v1/devices/self */
+export type DeviceSelf = { id: string; name: string; created_at: number; last_seen: number | null; web_push: boolean; revoked_others: number };

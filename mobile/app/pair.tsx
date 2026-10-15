@@ -111,7 +111,7 @@ export default function PairScreen() {
               </Text>
               <Mono>device {existing.deviceId} · key {fingerprint(b64urlDecode(existing.brainPub))}</Mono>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Button label="Open Inbox" style={{ flex: 1 }} onPress={() => router.replace('/')} />
+                <Button label="Open Cinnamon" style={{ flex: 1 }} onPress={() => router.replace('/')} />
                 <Button label="Forget" kind="destructive" style={{ flex: 1 }} onPress={unpair} />
               </View>
             </Card>
@@ -205,7 +205,7 @@ export default function PairScreen() {
             </Text>
           </Card>
 
-          <Button label="Open Inbox" kind="primary" disabled={!paired} onPress={() => router.replace('/')} />
+          <Button label="Open Cinnamon" kind="primary" disabled={!paired} onPress={() => router.replace('/')} />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

@@ -21,10 +21,11 @@ import { registerForPush, useNotificationRouting } from '@/src/push';
 import { db, setMeta } from '@/src/store';
 import { colors } from '@/src/theme';
 import { brainSocket } from '@/src/ws';
+import { WorldProvider } from '@/src/world';
 
 export { ErrorBoundary } from 'expo-router';
 
-export const unstable_settings = { initialRouteName: '(tabs)' };
+export const unstable_settings = { initialRouteName: 'index' };
 
 SplashScreen.preventAutoHideAsync();
 
@@ -87,12 +88,17 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <WorldProvider>
       <StatusBar style="dark" />
       {/* Phone-first: on a wide screen the app sits in a centred column on the strip board. */}
       <View style={{ flex: 1, backgroundColor: colors.ground }}>
       <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center', borderLeftWidth: wide ? 1 : 0, borderRightWidth: wide ? 1 : 0, borderColor: colors.hairline }}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" />
+        <Stack.Screen name="inbox" />
+        <Stack.Screen name="threads" />
+        <Stack.Screen name="runs" />
+        <Stack.Screen name="import" />
         <Stack.Screen name="pair" />
         <Stack.Screen name="thread/[id]" options={{ contentStyle: { backgroundColor: colors.surface } }} />
         <Stack.Screen name="approval/[id]" />
@@ -102,6 +108,7 @@ export default function RootLayout() {
       </Stack>
       </View>
       </View>
+      </WorldProvider>
     </SafeAreaProvider>
   );
 }

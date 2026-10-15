@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cinnamon · Worlds</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..700,0..100&amp;family=Instrument+Sans:wght@400..700&amp;family=DM+Mono:wght@400;500&amp;family=Young+Serif&amp;family=Alegreya:wght@800&amp;family=Unbounded:wght@500&amp;family=Fredoka:wght@600&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 1760px; height: 900px; box-sizing: border-box; padding: 44px 48px; background: #FBF5EC; color: #2A1A10; font-family: 'Instrument Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: flex-end; gap: 44px">
+<h2 style="margin: 0; font-family: 'Fraunces', serif; font-variation-settings: 'SOFT' 100; font-weight: 650; font-size: 60px; line-height: 58px; letter-spacing: -1.6px; flex: none">Five places for one roll</h2>
+<p style="margin: 0 0 6px; font-size: 15px; line-height: 22px; color: #5E4636; max-width: 860px">The cinnamon roll is the main character. Its swirl is your project's history, and it is the same in every world. A world changes where the roll lives, what your threads turn into, how the thing waiting for you arrives, who keeps it company, the type, and how everything moves.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 22px; flex: 1">
+<sc-for list="{{worlds}}" as="w" hint-placeholder-count="5">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px"><span style="font-family: {{w.font}}; font-weight: {{w.fw}}; font-size: {{w.fs}}px; line-height: 1">{{w.name}}</span><span style="font-size: 13px; color: #7D6756">{{w.where}}</span></div>
+<div style="display: flex; gap: 8px">
+<img src="{{w.day}}" alt="{{w.name}} by day" width="156" height="338" style="border-radius: 18px; border: 1px solid rgba(42,26,16,.12); display: block">
+<img src="{{w.night}}" alt="{{w.name}} by night" width="156" height="338" style="border-radius: 18px; border: 1px solid rgba(42,26,16,.12); display: block">
+</div>
+<div style="display: grid; grid-template-columns: 74px 1fr; gap: 7px 10px; font-size: 12.5px; line-height: 17px; color: #3B2A1E">
+<sc-for list="{{w.rows}}" as="r" hint-placeholder-count="6"><span style="font-family: 'DM Mono', monospace; font-size: 10.5px; color: #7D6756; padding-top: 1px">{{r.k}}</span><span>{{r.v}}</span></sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 40px; font-size: 13px; line-height: 19px; color: #5E4636">
+<span><strong style="color: #2A1A10; font-weight: 600">Switching</strong> grows the new world out of the menu tray (600 ms). The scene settles in, the roll drops into its new home with a squash, and the companion arrives a beat later.</span>
+<span><strong style="color: #2A1A10; font-weight: 600">What never changes:</strong> the headline sentence, the thing waiting for you at thumb height, the composer and menu, and every number. Each one is read from a file or a provider.</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1760,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const W = [
+      ['bk', 'Bakery', 'the default', "'Fraunces', serif", 650, 40, [['THE ROLL', 'cools on a rack, iced, steaming while jobs run'], ['THREADS', 'order tickets clipped to the rail'], ['FOR YOU', 'the ticket that says Order up'], ['COMPANION', 'Crumb the sparrow hops along the counter'], ['TYPE', 'Fraunces (soft) · Instrument Sans · DM Mono'], ['MOTION', 'steam, flour motes in the window light']]],
+      ['fs', 'Forest', 'under the old oak', "'Young Serif', serif", 400, 40, [['THE ROLL', 'on a stump, a leaf for a hat'], ['THREADS', 'wooden tags swinging from the branch'], ['FOR YOU', 'a note hung on twine'], ['COMPANION', 'Hazel the squirrel keeps one acorn per finding'], ['TYPE', 'Young Serif · Hanken Grotesk · IBM Plex Mono'], ['MOTION', 'tags swing; pollen by day, fireflies by night']]],
+      ['rs', 'Rustic', 'a cabin by the hearth', "'Alegreya', serif", 800, 40, [['THE ROLL', 'on a plate on a checked cloth'], ['THREADS', 'recipe cards pinned to the cork board, in handwriting'], ['FOR YOU', 'a note with a red pin'], ['COMPANION', 'Nutmeg the cat sleeps by the fire; ears up when you’re needed'], ['TYPE', 'Alegreya · Alegreya Sans · Caveat for handwriting'], ['MOTION', 'firelight flickers; snow outside the window']]],
+      ['sp', 'Space', 'out exploring', "'Unbounded', sans-serif", 500, 32, [['THE ROLL', 'floats in a helmet, slowly turning'], ['THREADS', 'satellites on the roll’s orbit'], ['FOR YOU', 'an incoming transmission'], ['COMPANION', 'Anise, eight arms, one lit arm per running job'], ['TYPE', 'Unbounded · Sora · Martian Mono'], ['MOTION', 'satellites drift, stars twinkle, a galaxy by night']]],
+      ['td', 'Tide', 'under the sea', "'Fredoka', sans-serif", 600, 40, [['THE ROLL', 'rests in an open clam'], ['THREADS', 'bubbles, newest floating highest'], ['FOR YOU', 'a bottle washed up on the sand'], ['COMPANION', 'Saffron the fish swims laps and heads for what needs you'], ['TYPE', 'Fredoka · Figtree · DM Mono'], ['MOTION', 'kelp sways, bubbles rise, marine snow by night']]],
+    ];
+    return { worlds: W.map(([k, name, where, font, fw, fs, rows]) => ({ name, where, font, fw, fs, rows: rows.map(([kk, v]) => ({ k: kk, v })), day: 'img/' + k + '-L.webp', night: 'img/' + k + '-D.webp' })) };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cinnamon · Standup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..700,0..100&amp;family=Instrument+Sans:wght@400..700&amp;family=DM+Mono:wght@400;500&amp;family=Young+Serif&amp;family=Hanken+Grotesk:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Alegreya:wght@500..800&amp;family=Alegreya+Sans:wght@400;500;700&amp;family=Courier+Prime&amp;family=Caveat:wght@500..700&amp;family=Unbounded:wght@400..700&amp;family=Sora:wght@400..700&amp;family=Martian+Mono:wght@400;500&amp;family=Fredoka:wght@400..700&amp;family=Figtree:wght@400..700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+/* ---------- world tokens: UI ---------- */
+.cn{--display:'Fraunces',serif;--dw:620;--dvs:'SOFT' 100;--dsz:1;--ui:'Instrument Sans',system-ui,sans-serif;--mono:'DM Mono',monospace;--hand:'Fraunces',serif;
+ --ink:#2A1A10;--ink2:#5E4636;--ink3:#7D6756;--raise:#FFFBF5;--bg2:#F3E6D4;--line:rgba(42,26,16,.12);--accent:#B4561F;--needs:#E8A22C;--finding:#4B6332;--ease:cubic-bezier(.65,0,.35,1);
+ --bk-wall:#F7E7D0;--bk-tile:#F3DEC2;--bk-tileLine:#E7CBA6;--bk-frame:#FFFFFF;--bk-sky1:#BFE0F0;--bk-sky2:#F8EBD3;--bk-orb:#FFE3A0;--bk-roofs:#D9BC97;--bk-wood:#B9784A;--bk-woodDark:#8E5530;--bk-top:#D49B65;--bk-rack:#6B4A35;--bk-rail:#A3A7AB;--bk-glow:rgba(255,214,150,.55);--bk-glass:rgba(255,255,255,.6);--bk-paper:#FFFDF8}
+.cn.dark{--ink:#F6E8D6;--ink2:#D0BBA5;--ink3:#AA937E;--raise:#2C2019;--bg2:#3A2B21;--line:rgba(246,232,214,.13);--accent:#F0A35E;--needs:#F2B04A;--finding:#A9C27A;
+ --bk-wall:#3A2A20;--bk-tile:#3F2E24;--bk-tileLine:#4C382B;--bk-frame:#5A4334;--bk-sky1:#101B33;--bk-sky2:#2A3858;--bk-orb:#F4EBD0;--bk-roofs:#0B1222;--bk-wood:#5E3B22;--bk-woodDark:#3E2616;--bk-top:#7A4F2E;--bk-rack:#2A1D15;--bk-rail:#6E6A66;--bk-glow:rgba(255,170,90,.38);--bk-glass:rgba(255,240,220,.2);--bk-paper:#F2E6D3}
+.cn.w-forest{--display:'Young Serif',serif;--dw:400;--dvs:normal;--dsz:.96;--ui:'Hanken Grotesk',sans-serif;--mono:'IBM Plex Mono',monospace;--hand:'Young Serif',serif;
+ --ink:#1C2619;--ink2:#44523D;--ink3:#5E6B57;--raise:#F8F9F1;--bg2:#E6EAD8;--line:rgba(28,38,25,.13);--accent:#3F6B2E;--needs:#D9A22C;--finding:#3F6B2E;--ease:cubic-bezier(.45,0,.2,1);
+ --fs-sky1:#CFE5D6;--fs-sky2:#F4F1DC;--fs-orb:#FFF1C4;--fs-far:#B7CFA8;--fs-pines:#9EBC8F;--fs-mid:#8DB377;--fs-ground:#6E9C55;--fs-grass:#5A8746;--fs-trunk:#6E4B32;--fs-bark:#563A26;--fs-leaf1:#3F6E36;--fs-leaf2:#4F8540;--fs-leaf3:#68A250;--fs-tag:#E2BC86;--fs-tagLine:#8C6A44;--fs-stump:#7B5638;--fs-stumpTop:#D2A971;--fs-ring:#9D7445;--fs-ray:rgba(255,255,236,.38);--fs-cap:#D9573C}
+.cn.w-forest.dark{--ink:#E6EBDD;--ink2:#B3C0AA;--ink3:#909D89;--raise:#18241B;--bg2:#223127;--line:rgba(230,235,221,.13);--accent:#9ACB72;--needs:#EBB64A;--finding:#9ACB72;
+ --fs-sky1:#0A181A;--fs-sky2:#1B312D;--fs-orb:#EDEBD9;--fs-far:#1A2F2A;--fs-pines:#152723;--fs-mid:#1D382B;--fs-ground:#14281B;--fs-grass:#1B3625;--fs-trunk:#3B2A1E;--fs-bark:#2B1E15;--fs-leaf1:#10241A;--fs-leaf2:#163021;--fs-leaf3:#1D3D29;--fs-tag:#C9A374;--fs-tagLine:#5E4630;--fs-stump:#4A3424;--fs-stumpTop:#80633F;--fs-ring:#5E4630;--fs-ray:rgba(255,255,236,0);--fs-cap:#9A3C2A}
+.cn.w-rustic{--display:'Alegreya',serif;--dw:800;--dvs:normal;--dsz:1;--ui:'Alegreya Sans',sans-serif;--mono:'Courier Prime',monospace;--hand:'Caveat',cursive;
+ --ink:#2B1D14;--ink2:#5A4636;--ink3:#76604C;--raise:#FAF4EA;--bg2:#EFE2CD;--line:rgba(43,29,20,.13);--accent:#A4452C;--needs:#D9962A;--finding:#4F6A3A;--ease:cubic-bezier(.68,-0.25,.27,1.25);
+ --rs-plank:#D8B88C;--rs-plankLine:#C29E70;--rs-knot:#B48D60;--rs-cork:#C79A62;--rs-corkDot:#B5874F;--rs-frame:#6E4A2B;--rs-card:#FFFDF7;--rs-cardLine:#A9C7E2;--rs-red:#D2564A;--rs-sky1:#D5E4EE;--rs-sky2:#F2EEE6;--rs-snow:#FFFFFF;--rs-hill:#E9EEF0;--rs-hill2:#D3DDE4;--rs-pine:#7F948C;--rs-stone:#B7AA9A;--rs-stoneDark:#8F8273;--rs-firebox:#2A1B12;--rs-mantel:#7A5131;--rs-table:#9A6438;--rs-tableTop:#B47A48;--rs-cloth:#C8473D;--rs-cloth2:#F3E9DB;--rs-plate:#F7F2EB;--rs-plateRim:#E2D7C9;--rs-glow:rgba(255,150,70,.22);--rs-orb:#FFFFFF}
+.cn.w-rustic.dark{--ink:#F1E4D0;--ink2:#CDB9A0;--ink3:#A8927A;--raise:#2A1F18;--bg2:#3A2C22;--line:rgba(241,228,208,.13);--accent:#E58B5A;--needs:#EBA94A;--finding:#B3C482;
+ --rs-plank:#4A3322;--rs-plankLine:#3B281A;--rs-knot:#33231A;--rs-cork:#6E5134;--rs-corkDot:#5E432A;--rs-frame:#2E1E13;--rs-card:#EFE6D4;--rs-cardLine:#7A93A8;--rs-red:#B5473D;--rs-sky1:#0E1730;--rs-sky2:#2B3557;--rs-snow:#DDE6F2;--rs-hill:#8FA0B8;--rs-hill2:#6E7F99;--rs-pine:#2C3A4A;--rs-stone:#6E6257;--rs-stoneDark:#4E453D;--rs-firebox:#120A06;--rs-mantel:#4A3020;--rs-table:#5A3820;--rs-tableTop:#704729;--rs-cloth:#8E3530;--rs-cloth2:#BFB09B;--rs-plate:#DCD3C6;--rs-plateRim:#BCAF9F;--rs-glow:rgba(255,140,60,.42);--rs-orb:#F4EBD0}
+.cn.w-space{--display:'Unbounded',sans-serif;--dw:500;--dvs:normal;--dsz:.76;--ui:'Sora',sans-serif;--mono:'Martian Mono',monospace;--hand:'Sora',sans-serif;
+ --ink:#14172E;--ink2:#41476A;--ink3:#5A6184;--raise:#F8F9FD;--bg2:#E6E8F4;--line:rgba(20,23,46,.13);--accent:#3D4FD1;--needs:#E79A2A;--finding:#7A3FD0;--ease:cubic-bezier(.83,0,.17,1);
+ --sp-sky1:#B9B4EE;--sp-sky2:#F8D9CB;--sp-star:#FFFFFF;--sp-starO:.5;--sp-planet:#E58C6A;--sp-ring:#F6CDB0;--sp-planet2:#7C8CE0;--sp-ground:#A99BD6;--sp-ground2:#9384C9;--sp-crater:#8070B8;--sp-orbit:rgba(40,30,90,.35);--sp-sat:#F4F3FC;--sp-panel:#3D4FD1;--sp-rim:#FFFFFF;--sp-glass:rgba(255,255,255,.24);--sp-galaxyO:0;--sp-label:rgba(255,255,255,.78)}
+.cn.w-space.dark{--ink:#E4E8F7;--ink2:#A8B0CC;--ink3:#8089A8;--raise:#141829;--bg2:#1E2340;--line:rgba(228,232,247,.13);--accent:#A9B8FF;--needs:#FFC46B;--finding:#C58BFF;
+ --sp-sky1:#05060F;--sp-sky2:#171C40;--sp-starO:1;--sp-planet:#C8643F;--sp-ring:#E8A982;--sp-planet2:#3E4AA8;--sp-ground:#1B2050;--sp-ground2:#13173C;--sp-crater:#0F1233;--sp-orbit:rgba(200,210,255,.3);--sp-sat:#CDD2EC;--sp-panel:#6C7DFF;--sp-rim:#C9D3FF;--sp-glass:rgba(170,190,255,.14);--sp-galaxyO:1;--sp-label:rgba(20,24,41,.78)}
+.cn.w-tide{--display:'Fredoka',sans-serif;--dw:600;--dvs:normal;--dsz:1;--ui:'Figtree',sans-serif;--mono:'DM Mono',monospace;--hand:'Fredoka',sans-serif;
+ --ink:#0B2A33;--ink2:#265660;--ink3:#3A6A73;--raise:#F2FAFA;--bg2:#DCEFEF;--line:rgba(11,42,51,.13);--accent:#1F7A8C;--needs:#E8A23A;--finding:#1F6E5A;--ease:cubic-bezier(.37,0,.63,1);
+ --td-w1:#C4EEEC;--td-w2:#2C8A9B;--td-ray:rgba(255,255,255,.3);--td-kelp:#3E8A5C;--td-kelp2:#2F7550;--td-sand:#EAD9AF;--td-sand2:#D8C190;--td-coral:#F28A6B;--td-coral2:#F7B9A3;--td-rock:#8FA6A4;--td-bub:rgba(255,255,255,.4);--td-bubRim:rgba(255,255,255,.85);--td-shell:#F5DCC8;--td-shell2:#E2B79C;--td-snow:rgba(255,255,255,0)}
+.cn.w-tide.dark{--ink:#D8EEF0;--ink2:#A3C6CB;--ink3:#7FA4AA;--raise:#0F2D38;--bg2:#163A46;--line:rgba(216,238,240,.13);--accent:#5CC8D7;--needs:#F2C46B;--finding:#7FD6C2;
+ --td-w1:#0E3746;--td-w2:#03121A;--td-ray:rgba(255,255,255,0);--td-kelp:#164A3A;--td-kelp2:#10382C;--td-sand:#34464A;--td-sand2:#26363A;--td-coral:#8A4A40;--td-coral2:#A86A5C;--td-rock:#2E4447;--td-bub:rgba(160,230,240,.1);--td-bubRim:rgba(160,230,240,.5);--td-shell:#B09A8A;--td-shell2:#8A7466;--td-snow:rgba(190,240,245,.7)}
+/* ---------- base ---------- */
+.cn *{box-sizing:border-box}
+.cn ::selection{background:var(--accent);color:var(--raise)}
+.cn button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cn button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:12px}
+.cn,.cn .t{transition:color .6s,background-color .6s,border-color .6s}
+.dsp{font-family:var(--display);font-weight:var(--dw);font-variation-settings:var(--dvs)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.press{transition:transform .1s cubic-bezier(.23,1,.32,1)}
+.press:active{transform:scale(.97)}
+.enter{animation:cnEnter .7s cubic-bezier(.23,1,.32,1) both}
+@keyframes cnEnter{from{opacity:0;transform:translateY(14px) scale(1.02)}}
+.rise{animation:cnRise .7s cubic-bezier(.23,1,.32,1) both}
+@keyframes cnRise{from{opacity:0;transform:translateY(10px)}}
+/* hero */
+.landA{animation:cnLandA .95s cubic-bezier(.3,0,.2,1) both}
+.landB{animation:cnLandB .95s cubic-bezier(.3,0,.2,1) both}
+@keyframes cnLandA{0%{transform:translateY(-260px);opacity:0}55%{transform:translateY(0);opacity:1}66%{transform:translateY(0) scale(1.08,.86)}80%{transform:translateY(-10px) scale(.97,1.04)}100%{transform:none}}
+@keyframes cnLandB{0%{transform:translateY(-260px);opacity:0}55%{transform:translateY(0);opacity:1}66%{transform:translateY(0) scale(1.08,.86)}80%{transform:translateY(-10px) scale(.97,1.04)}100%{transform:none}}
+.live .breathe{animation:cnBreathe 4.2s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes cnBreathe{50%{transform:scale(1.015,.985)}}
+.live .float{animation:cnFloat 5s ease-in-out infinite}
+@keyframes cnFloat{50%{transform:translateY(-10px) rotate(-2deg)}}
+.steam path{stroke-dasharray:6 40;animation:cnSteam 2.8s linear infinite}
+@keyframes cnSteam{from{stroke-dashoffset:46;opacity:.0}20%{opacity:.8}to{stroke-dashoffset:0;opacity:0}}
+.zz{animation:cnZz 3s ease-in-out infinite}
+@keyframes cnZz{0%{opacity:0;transform:translate(0,6px)}40%{opacity:1}100%{opacity:0;transform:translate(8px,-14px)}}
+.tipglow{animation:cnTip 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes cnTip{50%{opacity:.25;transform:scale(1.5)}}
+/* scene loops */
+.live .sway{animation:cnSway 6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes cnSway{50%{transform:rotate(3deg)}}
+.live .swing{animation:cnSwing 5s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 0%}
+@keyframes cnSwing{50%{transform:rotate(2.5deg)}}
+.live .flame{animation:cnFlame 1.1s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes cnFlame{0%{transform:scale(1,.9)}60%{transform:scale(.94,1.06)}100%{transform:scale(1.04,.96)}}
+.live .twinkle{animation:cnTw 4s ease-in-out infinite}
+@keyframes cnTw{50%{opacity:.15}}
+.live .bob{animation:cnBob 7s ease-in-out infinite}
+@keyframes cnBob{50%{transform:translateY(-8px)}}
+.live .snowfall{animation:cnSnow 9s linear infinite}
+@keyframes cnSnow{from{transform:translateY(-120px)}to{transform:translateY(0)}}
+/* pets */
+.live .hop{animation:cnHop 3.4s cubic-bezier(.3,0,.3,1) infinite}
+@keyframes cnHop{0%,70%,100%{transform:none}76%{transform:translateY(-9px)}82%{transform:none}88%{transform:translateY(-5px)}94%{transform:none}}
+.live .tail{animation:cnTail 2.6s ease-in-out infinite;transform-box:fill-box;transform-origin:0% 100%}
+@keyframes cnTail{0%,60%,100%{transform:none}70%{transform:rotate(-9deg)}80%{transform:rotate(4deg)}}
+.live .purr{animation:cnPurr 3.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes cnPurr{50%{transform:scale(1.02,1.05)}}
+.live .tent{animation:cnTent 2.4s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 0%}
+@keyframes cnTent{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}
+.live .swim{animation:cnSwim 16s linear infinite}
+@keyframes cnSwim{0%{transform:translate(40px,0)}24%{transform:translate(180px,-12px)}48%{transform:translate(320px,0) scaleX(1)}50%{transform:translate(320px,0) scaleX(-1)}74%{transform:translate(180px,10px) scaleX(-1)}98%{transform:translate(40px,0) scaleX(-1)}100%{transform:translate(40px,0) scaleX(1)}}
+.swim{transform:translate(110px,0)}
+.petin{animation:cnPetIn .8s cubic-bezier(.23,1,.32,1) .5s both}
+@keyframes cnPetIn{from{opacity:0}}
+.cn:not(.live) .tipglow,.cn:not(.live) .steam,.cn:not(.live) .zz{animation:none;opacity:0}
+/* ambient particles */
+.amb{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.amb i{position:absolute;border-radius:50%}
+.amb-fly i{background:#F6E27A;opacity:0;animation:cnFly var(--d) ease-in-out var(--dl) infinite}
+.dark .amb-fly i{box-shadow:0 0 9px 3px rgba(246,226,122,.7)}
+.amb-fly.day i{background:#FFF7D6;box-shadow:none}
+@keyframes cnFly{0%{opacity:0;transform:translate(0,0)}30%{opacity:.9}55%{transform:translate(16px,-20px)}75%{opacity:.5}100%{opacity:0;transform:translate(-8px,-38px)}}
+.amb-mote i{background:#FFF3DA;opacity:0;animation:cnMote var(--d) ease-in-out var(--dl) infinite}
+@keyframes cnMote{0%{opacity:0;transform:translate(0,0)}40%{opacity:.8}100%{opacity:0;transform:translate(-30px,40px)}}
+.amb-bub i{border:1.2px solid rgba(255,255,255,.75);background:rgba(255,255,255,.12);opacity:0;animation:cnBub var(--d) linear var(--dl) infinite}
+@keyframes cnBub{0%{opacity:0;transform:translate(0,0)}10%{opacity:.9}100%{opacity:0;transform:translate(10px,-520px)}}
+.cn:not(.live) .amb i,.cn:not(.live) .sway,.cn:not(.live) .swing,.cn:not(.live) .bob,.cn:not(.live) .flame,.cn:not(.live) .twinkle,.cn:not(.live) .swim{animation:none!important}
+/* needs-you */
+.need{position:absolute;left:12px;right:12px;bottom:86px;height:80px;text-align:left}
+.need svg.bgs{position:absolute;inset:0;overflow:visible}
+.need .row{position:relative;height:100%;display:flex;align-items:center;gap:14px;padding:0 20px 0 18px}
+.knot{position:relative;width:46px;height:46px;border-radius:50%;background:var(--needs);display:grid;place-items:center;flex:none}
+.knot::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1.5px solid var(--needs);opacity:0;animation:cnRing 1.6s cubic-bezier(.23,1,.32,1) 1.6s 2}
+@keyframes cnRing{0%{opacity:.8;transform:scale(.85)}100%{opacity:0;transform:scale(1.25)}}
+.signal{animation:cnSig 1.4s ease-in-out infinite}
+@keyframes cnSig{50%{opacity:.25}}
+/* dock & sheets */
+.dock{position:absolute;left:12px;right:12px;bottom:16px;height:58px;display:flex;gap:8px;align-items:center}
+.burger{position:relative;width:58px;height:58px;border-radius:50%;background:var(--raise);border:1px solid var(--line)!important;display:grid;place-items:center;flex:none;box-shadow:0 8px 20px -10px rgba(10,6,4,.4)}
+.burger i{position:absolute;width:20px;height:2px;border-radius:2px;background:var(--ink);transition:transform .32s cubic-bezier(.32,.72,0,1)}
+.burger i:nth-child(1){transform:translateY(-4px)}
+.burger i:nth-child(2){transform:translateY(4px)}
+.burger.open i:nth-child(1){transform:rotate(45deg)}
+.burger.open i:nth-child(2){transform:rotate(-45deg)}
+.scrim{position:absolute;inset:0;background:rgba(10,6,4,.42);opacity:0;pointer-events:none;transition:opacity .42s cubic-bezier(.32,.72,0,1)}
+.scrim.on{opacity:1;pointer-events:auto}
+.scrim.light{background:rgba(10,6,4,.18)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--raise);border-radius:30px 30px 0 0;transform:translateY(104%);transition:transform .5s cubic-bezier(.32,.72,0,1),height .5s cubic-bezier(.32,.72,0,1),background-color .6s;box-shadow:0 -10px 30px rgba(10,6,4,.12)}
+.sheet.on{transform:none}
+.mrow{width:100%;display:flex;align-items:center;gap:14px;min-height:56px;padding:0 6px;text-align:left;border-top:1px solid var(--line)}
+.mrow:first-child{border-top:0}
+.ico{width:34px;height:34px;border-radius:11px;background:var(--bg2);display:grid;place-items:center;flex:none}
+.step{animation:cnStepF .42s cubic-bezier(.32,.72,0,1) both}
+.step.back{animation-name:cnStepB}
+@keyframes cnStepF{from{opacity:0;transform:translateX(28px)}}
+@keyframes cnStepB{from{opacity:0;transform:translateX(-28px)}}
+.world{flex:none;width:132px;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;text-align:left;border:2px solid transparent;transition:border-color .2s,transform .1s cubic-bezier(.23,1,.32,1)}
+.world:active{transform:scale(.97)}
+.world.sel{border-color:var(--ink)}
+.seg3{display:flex;background:var(--bg2);border-radius:999px;padding:3px}
+.seg3>button{flex:1;min-height:38px;border-radius:999px;font-size:13px;font-weight:600;transition:background-color .2s,color .2s}
+.seg3>button.on{background:var(--ink);color:var(--raise)}
+.sw2{position:relative;width:48px;height:30px;border-radius:999px;background:var(--bg2);border:1px solid var(--line)!important;transition:background-color .2s;flex:none}
+.sw2>i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--ink3);transition:transform .3s cubic-bezier(.32,.72,0,1),background-color .2s}
+.sw2.on{background:var(--accent)}
+.sw2.on>i{transform:translateX(18px);background:var(--raise)}
+.chip{font-size:11px;font-weight:600;border-radius:999px;padding:3px 9px;flex:none}
+.chip.ask{background:var(--needs);color:#1A120D}
+.chip.no{background:var(--ink);color:var(--raise)}
+.gauge .v{stroke-dasharray:100;animation:cnSweep .9s cubic-bezier(.23,1,.32,1) .15s both}
+@keyframes cnSweep{from{stroke-dashoffset:100}}
+.wipe{position:absolute;inset:0;pointer-events:none;transition:clip-path .6s cubic-bezier(.65,0,.35,1),opacity .45s ease}
+.wipe.fade{opacity:0}
+.out{box-shadow:inset 0 0 0 1.5px var(--needs)}
+.say{position:absolute;max-width:230px;background:var(--raise);color:var(--ink);border-radius:18px;padding:10px 13px;font-size:13px;line-height:18px;box-shadow:0 12px 26px -12px rgba(10,6,4,.45);transform-origin:80% 100%;animation:cnSay .35s cubic-bezier(.34,1.4,.64,1) both}
+@keyframes cnSay{from{opacity:0;transform:scale(.8) translateY(6px)}}
+.trace{stroke-dasharray:1;stroke-dashoffset:1;animation:cnTrace 1.4s cubic-bezier(.23,1,.32,1) .3s forwards}
+@keyframes cnTrace{to{stroke-dashoffset:0}}
+.opt{flex:1;border:1.5px solid var(--line);border-radius:20px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.opt.is-picked{border-color:var(--accent)}
+.wave{display:flex;align-items:center;gap:2px;height:28px}
+.bar{width:3px;border-radius:2px;background:var(--ink3);opacity:.45}
+.wave.is-playing .bar{background:var(--accent);opacity:1;animation:cnBar .8s ease-in-out infinite alternate}
+@keyframes cnBar{from{transform:scaleY(.35)}to{transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){.enter,.rise,.step,.landA,.landB,.petin{animation:cnRise .01s both!important}.breathe,.float,.swing,.steam path,.zz,.tipglow,.sway,.flame,.twinkle,.bob,.snowfall,.hop,.tail,.purr,.tent,.swim,.amb i,.knot::after,.signal,.gauge .v,.trace{animation:none!important}.trace{stroke-dashoffset:0}.sheet,.scrim,.wipe{transition-duration:.15s!important}}
+</style>
+</helmet>
+<div class="cn t {{rootCls}}" style="width: 390px; height: 844px; position: relative; overflow: hidden; color: var(--ink); font-family: var(--ui)">
+
+<svg width="390" height="844" viewBox="0 0 390 844" role="img" aria-label="{{sceneLabel}}" style="position: absolute; inset: 0">
+<defs>
+<linearGradient id="bkWin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--bk-sky1)"></stop><stop offset="1" style="stop-color: var(--bk-sky2)"></stop></linearGradient>
+<radialGradient id="bkGlow"><stop offset="0" style="stop-color: var(--bk-glow)"></stop><stop offset="1" stop-color="rgba(255,214,150,0)"></stop></radialGradient>
+<pattern id="bkTiles" width="44" height="22" patternUnits="userSpaceOnUse"><rect width="44" height="22" style="fill: var(--bk-tile)"></rect><path d="M0 21.5H44M22 0V11M0 10.5H44M44 11V22M0 11V22" fill="none" stroke-width="1.2" style="stroke: var(--bk-tileLine)"></path></pattern>
+<linearGradient id="fsSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--fs-sky1)"></stop><stop offset=".7" style="stop-color: var(--fs-sky2)"></stop></linearGradient>
+<linearGradient id="rsWin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--rs-sky1)"></stop><stop offset="1" style="stop-color: var(--rs-sky2)"></stop></linearGradient>
+<radialGradient id="rsGlow"><stop offset="0" style="stop-color: var(--rs-glow)"></stop><stop offset="1" stop-color="rgba(255,150,70,0)"></stop></radialGradient>
+<pattern id="rsCheck" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" style="fill: var(--rs-cloth2)"></rect><rect width="8" height="8" style="fill: var(--rs-cloth)"></rect><rect x="8" y="8" width="8" height="8" style="fill: var(--rs-cloth)"></rect></pattern>
+<linearGradient id="spSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--sp-sky1)"></stop><stop offset="1" style="stop-color: var(--sp-sky2)"></stop></linearGradient>
+<radialGradient id="spNeb" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="rgba(160,120,255,.35)"></stop><stop offset="1" stop-color="rgba(160,120,255,0)"></stop></radialGradient>
+<linearGradient id="tdSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--td-w1)"></stop><stop offset="1" style="stop-color: var(--td-w2)"></stop></linearGradient>
+</defs>
+
+<!-- ============ BAKERY ============ -->
+<sc-if value="{{isBakery}}" hint-placeholder-val="{{ true }}">
+<g class="enter">
+<rect width="390" height="844" style="fill: var(--bk-wall)"></rect>
+<rect y="330" width="390" height="232" fill="url(#bkTiles)"></rect>
+<circle cx="310" cy="380" r="250" fill="url(#bkGlow)"></circle>
+<g transform="translate(252 312)">
+<rect width="118" height="122" rx="12" style="fill: var(--bk-frame)"></rect>
+<rect x="8" y="8" width="102" height="106" rx="7" fill="url(#bkWin)"></rect>
+<circle cx="80" cy="36" r="13" style="fill: var(--bk-orb)"></circle>
+<path d="M8 114V88L22 76L36 88V78H54V92L70 80L86 93V84H110V114Z" style="fill: var(--bk-roofs)"></path>
+<rect x="57" y="8" width="4" height="106" style="fill: var(--bk-frame)"></rect><rect x="8" y="59" width="102" height="4" style="fill: var(--bk-frame)"></rect>
+<rect x="-6" y="118" width="130" height="9" rx="3" style="fill: var(--bk-woodDark)"></rect>
+</g>
+<g transform="translate(20 352)">
+<rect x="0" y="6" width="34" height="42" rx="9" style="fill: var(--bk-glass)" stroke="rgba(255,255,255,.7)"></rect><rect x="4" y="22" width="26" height="22" rx="6" fill="#F7F2EA"></rect><rect x="3" y="0" width="28" height="8" rx="3" style="fill: var(--bk-woodDark)"></rect>
+<rect x="44" y="12" width="32" height="36" rx="9" style="fill: var(--bk-glass)" stroke="rgba(255,255,255,.7)"></rect><path d="M50 46V20M56 46V18M62 46V21M68 46V19" stroke="#8A4320" stroke-width="4" stroke-linecap="round"></path><rect x="47" y="6" width="26" height="8" rx="3" style="fill: var(--bk-woodDark)"></rect>
+<rect x="86" y="16" width="30" height="32" rx="9" style="fill: var(--bk-glass)" stroke="rgba(255,255,255,.7)"></rect><rect x="90" y="28" width="22" height="16" rx="5" fill="#E9C26E"></rect><rect x="89" y="10" width="24" height="8" rx="3" style="fill: var(--bk-woodDark)"></rect>
+<rect x="-6" y="48" width="134" height="7" rx="2" style="fill: var(--bk-woodDark)"></rect>
+</g>
+<rect x="12" y="212" width="366" height="5" rx="2.5" style="fill: var(--bk-rail)"></rect>
+<sc-for list="{{threads}}" as="th" hint-placeholder-count="3">
+<g style="transform: translate({{th.x}}px, 216px) rotate({{th.r}}deg); transform-origin: 55px 0px">
+<path d="M0 0H110V64L104 72L98 64L92 72L86 64L80 72L74 64L68 72L62 64L56 72L50 64L44 72L38 64L32 72L26 64L20 72L14 64L8 72L0 64Z" style="fill: var(--bk-paper)" stroke="rgba(0,0,0,.06)"></path>
+<rect x="0" y="0" width="110" height="5" style="fill: {{th.band}}"></rect>
+<rect x="43" y="-5" width="24" height="11" rx="3" style="fill: var(--bk-rail)"></rect>
+<text x="10" y="27" style="font-family: var(--display); font-variation-settings: var(--dvs); font-weight: 600; font-size: 13px; fill: #2A1A10">{{th.short}}</text>
+<text x="10" y="45" style="font-family: var(--mono); font-size: 9.5px; fill: #6A5444">{{th.state}}</text>
+</g>
+</sc-for>
+<rect y="560" width="390" height="22" style="fill: var(--bk-top)"></rect>
+<rect y="582" width="390" height="262" style="fill: var(--bk-wood)"></rect>
+<path d="M0 598H390M98 598V844M196 598V844M294 598V844" stroke-width="2" style="stroke: var(--bk-woodDark)" opacity=".5"></path>
+<g transform="translate(190 566)"><ellipse rx="100" ry="11" fill="none" stroke-width="3" style="stroke: var(--bk-rack)"></ellipse><path d="M-84 -5H84M-96 0H96M-84 5H84" stroke-width="1.6" style="stroke: var(--bk-rack)" opacity=".8"></path></g>
+<sc-if value="{{petOn}}" hint-placeholder-val="{{ true }}">
+<g class="petin" style="transform: translate(336px, 562px)"><g class="hop">
+<path d="M14 -18L36 -27L31 -13Z" fill="#7A5236"></path>
+<ellipse cx="2" cy="-18" rx="18" ry="13" fill="#A8774E"></ellipse>
+<ellipse cx="-4" cy="-13" rx="12" ry="8" fill="#EEDCC3"></ellipse>
+<path d="M-2 -25C10 -29 21 -22 18 -11C10 -13 2 -16 -2 -25Z" fill="#7E5434"></path>
+<circle cx="-14" cy="-32" r="10" fill="#9A6A44"></circle>
+<path d="M-23.5 -35C-21 -44 -8 -45 -5 -36C-10 -38.5 -17 -38.5 -23.5 -35Z" fill="#6E4A2E"></path>
+<circle cx="-17" cy="-28.5" r="3.6" fill="#EEDCC3"></circle>
+<circle cx="-17" cy="-33" r="2.3" fill="#1A120D"></circle><circle cx="-17.8" cy="-33.8" r=".75" fill="#fff"></circle>
+<path d="M-24 -32.5L-32 -30.5L-24 -28.3Z" fill="#E7A93E"></path>
+<path d="M-3 -6V0M4 -6V0" stroke="#C78A4A" stroke-width="1.8" stroke-linecap="round"></path>
+</g></g>
+</sc-if>
+</g>
+</sc-if>
+
+<!-- ============ FOREST ============ -->
+<sc-if value="{{isForest}}" hint-placeholder-val="{{ false }}">
+<g class="enter">
+<rect width="390" height="844" fill="url(#fsSky)"></rect>
+<circle cx="64" cy="268" r="30" style="fill: var(--fs-orb)"></circle>
+<path d="M0 470C70 438 150 452 230 432C300 416 350 428 390 414V844H0Z" style="fill: var(--fs-far)"></path>
+<path d="{{pinesD}}" style="fill: var(--fs-pines)"></path>
+<path d="M0 520C90 492 180 510 250 496C320 482 360 490 390 486V844H0Z" style="fill: var(--fs-mid)"></path>
+<path d="M150 230L60 620H120L190 230ZM235 240L200 620H250L262 240Z" style="fill: var(--fs-ray)"></path>
+<path d="M258 660C268 600 266 520 270 440C274 380 272 320 266 262H334C328 320 328 380 332 440C336 520 338 600 352 660Z" style="fill: var(--fs-trunk)"></path>
+<path d="M232 668C246 650 256 640 262 612L272 640C264 652 252 662 232 668ZM372 668C356 652 346 640 344 610L334 640C340 652 352 662 372 668Z" style="fill: var(--fs-trunk)"></path>
+<path d="M286 300C282 380 290 470 284 560M312 290C318 370 308 460 316 580M298 420C296 470 300 520 296 600" fill="none" stroke-width="3" stroke-linecap="round" style="stroke: var(--fs-bark)"></path>
+<ellipse cx="302" cy="470" rx="9" ry="12" style="fill: var(--fs-bark)"></ellipse>
+<path d="M282 378C224 368 150 340 22 334V344C150 352 224 386 282 396Z" style="fill: var(--fs-trunk)"></path>
+<circle cx="300" cy="296" r="96" style="fill: var(--fs-leaf1)"></circle>
+<circle cx="214" cy="316" r="70" style="fill: var(--fs-leaf2)"></circle>
+<circle cx="366" cy="334" r="62" style="fill: var(--fs-leaf2)"></circle>
+<circle cx="138" cy="330" r="54" style="fill: var(--fs-leaf1)"></circle>
+<circle cx="258" cy="260" r="56" style="fill: var(--fs-leaf3)"></circle>
+<circle cx="348" cy="256" r="48" style="fill: var(--fs-leaf3)"></circle>
+<circle cx="62" cy="346" r="40" style="fill: var(--fs-leaf2)"></circle>
+<circle cx="180" cy="284" r="34" style="fill: var(--fs-leaf3)"></circle>
+<sc-for list="{{threads}}" as="th" hint-placeholder-count="3">
+<g style="transform: translate({{th.fx}}px, {{th.fy}}px)"><g class="swing">
+<path d="M0 -26V0" stroke-width="1.5" style="stroke: var(--fs-tagLine)"></path>
+<path d="M-46 0H46L50 6V44L46 50H-46L-50 44V6Z" style="fill: var(--fs-tag)"></path>
+<path d="M-40 14H40M-40 34H36" stroke-width="1" style="stroke: var(--fs-tagLine)" opacity=".35"></path>
+<circle cx="0" cy="6" r="2.5" style="fill: var(--fs-tagLine)"></circle>
+<text x="0" y="26" text-anchor="middle" style="font-family: var(--display); font-size: 12px; fill: #2A1D12">{{th.short}}</text>
+<text x="0" y="41" text-anchor="middle" style="font-family: var(--mono); font-size: 9px; fill: #5A4128">{{th.state}}</text>
+<circle cx="-38" cy="8" r="3.5" style="fill: {{th.band}}"></circle>
+</g></g>
+</sc-for>
+<path d="M0 604C70 592 140 600 210 594C280 588 340 596 390 590V844H0Z" style="fill: var(--fs-ground)"></path>
+<path d="M18 606l6-14 3 14 5-10 2 10M340 600l5-12 3 12 4-9 2 9M228 604l4-10 3 10" fill="none" stroke-width="2.2" stroke-linecap="round" style="stroke: var(--fs-grass)"></path>
+<path d="M24 640C40 610 70 604 92 612C70 612 52 624 44 644ZM30 650C20 624 0 616 -6 618" fill="none" stroke-width="3" stroke-linecap="round" style="stroke: var(--fs-grass)"></path>
+<path d="M82 596C82 620 86 640 80 664H220C214 640 218 620 218 596Z" style="fill: var(--fs-stump)"></path>
+<ellipse cx="150" cy="596" rx="68" ry="14" style="fill: var(--fs-stumpTop)"></ellipse>
+<ellipse cx="150" cy="596" rx="48" ry="9" fill="none" stroke-width="1.4" style="stroke: var(--fs-ring)"></ellipse><ellipse cx="150" cy="596" rx="28" ry="5" fill="none" stroke-width="1.4" style="stroke: var(--fs-ring)"></ellipse>
+<g transform="translate(232 652)"><rect x="-3" y="-14" width="6" height="14" rx="3" fill="#EFE3CF"></rect><path d="M-13 -12C-13 -26 13 -26 13 -12Z" style="fill: var(--fs-cap)"></path><circle cx="-4" cy="-18" r="2" fill="#fff" opacity=".85"></circle><circle cx="5" cy="-16" r="1.6" fill="#fff" opacity=".85"></circle></g>
+<sc-if value="{{petOn}}" hint-placeholder-val="{{ true }}">
+<g class="petin" style="transform: translate(318px, 650px)">
+<g class="tail"><path d="M10 -8C40 -8 50 -40 38 -62C28 -80 4 -78 6 -60C8 -48 26 -50 26 -36C26 -22 12 -18 6 -14Z" fill="#B0602A"></path><path d="M30 -56C34 -46 30 -34 22 -28" fill="none" stroke="#D88A4E" stroke-width="3" stroke-linecap="round"></path></g>
+<ellipse cx="0" cy="-20" rx="15" ry="20" fill="#C06F33"></ellipse>
+<ellipse cx="-5" cy="-18" rx="8" ry="13" fill="#F2DDBA"></ellipse>
+<ellipse cx="7" cy="-8" rx="12" ry="9" fill="#B5652D"></ellipse>
+<circle cx="-6" cy="-44" r="12" fill="#C06F33"></circle>
+<path d="M-13 -53L-15 -65L-6 -56ZM-1 -55L3 -66L5 -54Z" fill="#B0602A"></path>
+<ellipse cx="-14" cy="-40.5" rx="6.5" ry="4.8" fill="#F2DDBA"></ellipse>
+<circle cx="-9" cy="-47" r="2.5" fill="#1A120D"></circle><circle cx="-9.8" cy="-47.8" r=".8" fill="#fff"></circle>
+<circle cx="-20" cy="-41.5" r="1.7" fill="#3A2216"></circle>
+<g transform="translate(-15 -27)"><ellipse rx="5" ry="6" cy="2" fill="#C98B4A"></ellipse><path d="M-6 -1C-6 -7 6 -7 6 -1Z" fill="#7A4B26"></path></g>
+<ellipse cx="-20" cy="-27" rx="3.5" ry="3" fill="#B5652D"></ellipse><ellipse cx="-10" cy="-27" rx="3.5" ry="3" fill="#B5652D"></ellipse>
+<g transform="translate(-26 -4)"><ellipse rx="4.5" ry="5.5" cy="1" fill="#C98B4A"></ellipse><path d="M-5.5 -2C-5.5 -7.5 5.5 -7.5 5.5 -2Z" fill="#7A4B26"></path></g>
+</g>
+</sc-if>
+</g>
+</sc-if>
+
+<!-- ============ RUSTIC ============ -->
+<sc-if value="{{isRustic}}" hint-placeholder-val="{{ false }}">
+<g class="enter">
+<rect width="390" height="844" style="fill: var(--rs-plank)"></rect>
+<path d="{{planksD}}" stroke-width="2" style="stroke: var(--rs-plankLine)"></path>
+<ellipse cx="46" cy="470" rx="5" ry="8" style="fill: var(--rs-knot)"></ellipse><ellipse cx="206" cy="372" rx="4" ry="7" style="fill: var(--rs-knot)"></ellipse>
+<circle cx="320" cy="520" r="230" fill="url(#rsGlow)"></circle>
+<rect x="18" y="200" width="196" height="150" rx="8" style="fill: var(--rs-frame)"></rect>
+<rect x="26" y="208" width="180" height="134" rx="4" style="fill: var(--rs-cork)"></rect>
+<path d="M40 228h.01M90 300h.01M150 220h.01M186 330h.01M60 330h.01M170 270h.01" stroke-width="3" stroke-linecap="round" style="stroke: var(--rs-corkDot)"></path>
+<sc-for list="{{threads}}" as="th" hint-placeholder-count="3">
+<g style="transform: translate({{th.rx}}px, {{th.ry}}px) rotate({{th.rr}}deg)">
+<rect x="0" y="0" width="86" height="58" rx="2" style="fill: var(--rs-card)"></rect>
+<path d="M0 12H86" stroke-width="1.5" style="stroke: var(--rs-red)"></path>
+<path d="M0 26H86M0 38H86M0 50H86" stroke-width=".8" style="stroke: var(--rs-cardLine)"></path>
+<circle cx="43" cy="4" r="4" style="fill: {{th.band}}"></circle>
+<text x="6" y="25" style="font-family: var(--hand); font-weight: 700; font-size: 15px; fill: #2B1D14">{{th.short}}</text>
+<text x="6" y="47" style="font-family: var(--hand); font-weight: 600; font-size: 13px; fill: #5A4636">{{th.state}}</text>
+</g>
+</sc-for>
+<rect x="232" y="198" width="138" height="132" rx="8" style="fill: var(--rs-frame)"></rect>
+<rect x="240" y="206" width="122" height="116" rx="4" fill="url(#rsWin)"></rect>
+<circle cx="336" cy="236" r="11" style="fill: var(--rs-orb)" opacity=".9"></circle>
+<path d="M240 282C270 266 300 276 330 262C344 256 356 258 362 256V322H240Z" style="fill: var(--rs-hill2)"></path>
+<path d="M240 298C276 284 310 296 362 284V322H240Z" style="fill: var(--rs-hill)"></path>
+<path d="M262 288l7-18 7 18ZM282 292l6-15 6 15ZM330 280l7-20 7 20Z" style="fill: var(--rs-pine)"></path>
+<g style="clip-path: inset(206px 28px 522px 240px)"><g class="snowfall"><path d="{{snowD}}" stroke-width="2.4" stroke-linecap="round" style="stroke: var(--rs-snow)"></path></g></g>
+<rect x="299" y="206" width="4" height="116" style="fill: var(--rs-frame)"></rect><rect x="240" y="262" width="122" height="4" style="fill: var(--rs-frame)"></rect>
+<rect x="244" y="384" width="150" height="14" rx="3" style="fill: var(--rs-mantel)"></rect>
+<path d="M254 398H390V600H254Z" style="fill: var(--rs-stone)"></path>
+<path d="{{stonesD}}" fill="none" stroke-width="2" style="stroke: var(--rs-stoneDark)"></path>
+<path d="M276 600V490C276 448 368 448 368 490V600Z" style="fill: var(--rs-firebox)"></path>
+<path d="M290 590C292 560 306 556 302 528C318 548 312 566 322 572C326 556 334 548 332 532C348 556 352 578 350 590Z" fill="#E8742A" class="flame"></path>
+<path d="M302 590C304 572 312 566 312 552C322 566 320 578 326 582C330 572 334 566 334 556C342 572 342 584 340 590Z" fill="#FFC14A" class="flame" style="animation-delay: -.4s"></path>
+<path d="M286 594H360" stroke="#3A2214" stroke-width="5" stroke-linecap="round"></path>
+<g transform="translate(262 384)"><rect x="0" y="-26" width="16" height="26" rx="3" fill="#F2E6CF"></rect><path d="M8 -26V-32" stroke="#3A2214" stroke-width="1.5"></path><path class="flame" d="M8 -33C4 -38 7 -44 8 -46C9 -44 12 -38 8 -33Z" fill="#FFC14A"></path></g>
+<g transform="translate(350 384)"><rect x="-14" y="-30" width="28" height="30" rx="8" fill="rgba(255,255,255,.45)" stroke="rgba(255,255,255,.7)"></rect><path d="M-8 -2V-22M-2 -2V-24M4 -2V-21" stroke="#8A4320" stroke-width="4" stroke-linecap="round"></path></g>
+<path d="M0 604L390 590V844H0Z" style="fill: var(--rs-table)"></path>
+<path d="M0 604L390 590V600L0 616Z" style="fill: var(--rs-tableTop)"></path>
+<path d="M0 640L390 628M0 700L390 690M0 770L390 762" stroke-width="1.5" opacity=".35" style="stroke: var(--rs-frame)"></path>
+<path d="M54 606L236 598L248 640L46 650Z" fill="url(#rsCheck)" opacity=".95"></path>
+<ellipse cx="160" cy="610" rx="96" ry="19" style="fill: var(--rs-plateRim)"></ellipse>
+<ellipse cx="160" cy="607" rx="80" ry="14" style="fill: var(--rs-plate)"></ellipse>
+<sc-if value="{{petOn}}" hint-placeholder-val="{{ true }}">
+<g class="petin" style="transform: translate(326px, 612px)">
+<ellipse cx="2" cy="1" rx="44" ry="7" fill="rgba(0,0,0,.18)"></ellipse>
+<g class="purr">
+<ellipse cx="6" cy="-16" rx="35" ry="17" fill="#D98A47"></ellipse>
+<path d="M-2 -32C0 -24 -2 -18 -6 -12M10 -33C12 -24 10 -16 6 -9M22 -30C24 -22 22 -16 18 -10" fill="none" stroke="#B86A30" stroke-width="3" stroke-linecap="round"></path>
+<path d="M-30 -2C-26 6 34 8 40 -6" fill="none" stroke="#C8783C" stroke-width="7" stroke-linecap="round"></path>
+<circle cx="-22" cy="-20" r="13.5" fill="#D98A47"></circle>
+<path d="{{earsD}}" fill="#D98A47"></path>
+<path d="M-30 -30L-30.5 -36L-26 -31ZM-17 -32L-14 -37L-14 -30Z" fill="#F2A6A0"></path>
+<path d="{{catEyes}}" fill="none" stroke="#4A2A14" stroke-width="1.5" stroke-linecap="round"></path>
+<path d="M-24 -15L-22 -13L-20 -15Z" fill="#E88A86"></path>
+</g>
+</g>
+</sc-if>
+</g>
+</sc-if>
+
+<!-- ============ SPACE ============ -->
+<sc-if value="{{isSpace}}" hint-placeholder-val="{{ false }}">
+<g class="enter">
+<rect width="390" height="844" fill="url(#spSky)"></rect>
+<g style="opacity: var(--sp-starO)"><sc-for list="{{stars}}" as="s" hint-placeholder-count="30"><circle cx="{{s.x}}" cy="{{s.y}}" r="{{s.r}}" class="{{s.c}}" style="fill: var(--sp-star); animation-delay: {{s.dl}}s"></circle></sc-for></g>
+<g style="opacity: var(--sp-galaxyO)">
+<ellipse cx="300" cy="300" rx="90" ry="44" fill="url(#spNeb)"></ellipse>
+<path d="{{galaxyD}}" fill="none" stroke="#E9C9FF" stroke-width="2.4" stroke-linecap="round" opacity=".55"></path>
+<circle cx="300" cy="300" r="5" fill="#FFF4D6"></circle>
+</g>
+<circle cx="62" cy="292" r="34" style="fill: var(--sp-planet)"></circle>
+<path d="M62 258a34 34 0 0 1 0 68a22 34 0 0 0 0 -68Z" fill="rgba(0,0,0,.12)"></path>
+<ellipse cx="62" cy="294" rx="60" ry="11" fill="none" stroke-width="5" transform="rotate(-14 62 294)" style="stroke: var(--sp-ring)"></ellipse>
+<circle cx="350" cy="420" r="9" style="fill: var(--sp-planet2)"></circle>
+<path d="M-20 680C80 640 300 640 410 680V844H-20Z" style="fill: var(--sp-ground)"></path>
+<ellipse cx="80" cy="700" rx="30" ry="6" style="fill: var(--sp-crater)"></ellipse><ellipse cx="300" cy="716" rx="22" ry="5" style="fill: var(--sp-crater)"></ellipse><ellipse cx="200" cy="676" rx="14" ry="3" style="fill: var(--sp-crater)"></ellipse>
+<g transform="translate(60 670)"><path d="M0 -40C8 -30 10 -14 8 0H-8C-10 -14 -8 -30 0 -40Z" style="fill: var(--sp-sat)"></path><circle cx="0" cy="-22" r="4" style="fill: var(--sp-panel)"></circle><path d="M-8 -6L-16 4H-6ZM8 -6L16 4H6Z" fill="#E0663A"></path></g>
+<ellipse cx="200" cy="505" rx="176" ry="96" fill="none" stroke-width="1.5" stroke-dasharray="3 6" transform="rotate(-6 200 505)" style="stroke: var(--sp-orbit)"></ellipse>
+<sc-for list="{{threads}}" as="th" hint-placeholder-count="3">
+<g style="transform: translate({{th.sx}}px, {{th.sy}}px)"><g class="bob" style="animation-delay: {{th.dl}}s">
+<rect x="-14" y="-3" width="9" height="6" style="fill: var(--sp-panel)"></rect><rect x="5" y="-3" width="9" height="6" style="fill: var(--sp-panel)"></rect>
+<rect x="-5" y="-5" width="10" height="10" rx="2" style="fill: var(--sp-sat)"></rect>
+<circle cx="0" cy="-8" r="2.5" style="fill: {{th.band}}"></circle>
+<rect x="{{th.lx}}" y="{{th.ly}}" width="{{th.lw}}" height="34" rx="10" style="fill: var(--sp-label)"></rect>
+<text x="{{th.tx}}" y="{{th.ty}}" text-anchor="{{th.ta}}" style="font-family: var(--ui); font-weight: 600; font-size: 11px; fill: var(--ink)">{{th.name}}</text>
+<text x="{{th.tx}}" y="{{th.ty2}}" text-anchor="{{th.ta}}" style="font-family: var(--mono); font-size: 8.5px; fill: var(--ink2)">{{th.state}}</text>
+</g></g>
+</sc-for>
+<sc-if value="{{petOn}}" hint-placeholder-val="{{ true }}">
+<g class="petin" style="transform: translate(318px, 312px)"><g class="float" style="animation-duration: 6.5s">
+<sc-for list="{{tents}}" as="tn" hint-placeholder-count="8"><g class="tent" style="animation-delay: {{tn.dl}}s"><path d="{{tn.d}}" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="{{tn.ex}}" cy="{{tn.ey}}" r="{{tn.r}}" style="fill: {{tn.c}}"></circle></g></sc-for>
+<path d="M-28 4C-31 -42 31 -42 28 4C18 8 -18 8 -28 4Z" fill="#8E7BFF"></path>
+<path d="M-18 -26C-12 -34 -2 -36 6 -34" fill="none" stroke="#B8ABFF" stroke-width="4" stroke-linecap="round"></path>
+<ellipse cx="0" cy="-12" rx="11.5" ry="12.5" fill="#fff"></ellipse><circle cx="2" cy="-10" r="6.5" fill="#1A1440"></circle><circle cx="4.5" cy="-13" r="2.2" fill="#fff"></circle>
+<ellipse cx="-17" cy="-2" rx="4" ry="2.4" fill="#F2A6D8" opacity=".8"></ellipse><ellipse cx="17" cy="-2" rx="4" ry="2.4" fill="#F2A6D8" opacity=".8"></ellipse>
+<path d="M-5 2Q0 6 5 2" fill="none" stroke="#2A1F66" stroke-width="1.6" stroke-linecap="round"></path>
+<path d="M0 -34C2 -42 8 -46 10 -50" fill="none" stroke="#8E7BFF" stroke-width="2.6" stroke-linecap="round"></path><circle cx="10.5" cy="-52" r="4.2" fill="#5EE6C8"></circle>
+</g></g>
+</sc-if>
+</g>
+</sc-if>
+
+<!-- ============ TIDE ============ -->
+<sc-if value="{{isTide}}" hint-placeholder-val="{{ false }}">
+<g class="enter">
+<rect width="390" height="844" fill="url(#tdSea)"></rect>
+<path d="M20 0L-40 600H40L90 0ZM150 0L120 640H180L200 0ZM270 0L300 600H350L320 0Z" style="fill: var(--td-ray)"></path>
+<sc-for list="{{snow}}" as="s" hint-placeholder-count="20"><circle cx="{{s.x}}" cy="{{s.y}}" r="{{s.r}}" style="fill: var(--td-snow)"></circle></sc-for>
+<g class="sway" style="animation-duration: 7s"><path d="M34 640C20 560 50 500 30 430C14 370 40 320 30 270" fill="none" stroke-width="10" stroke-linecap="round" style="stroke: var(--td-kelp)"></path><path d="M30 470C44 460 54 448 56 432M34 380C20 372 12 360 12 344M32 300C46 292 52 280 52 266" fill="none" stroke-width="7" stroke-linecap="round" style="stroke: var(--td-kelp)"></path></g>
+<g class="sway" style="animation-duration: 8.5s; animation-delay: -2s"><path d="M64 650C56 590 76 540 62 480C52 440 70 400 62 360" fill="none" stroke-width="8" stroke-linecap="round" style="stroke: var(--td-kelp2)"></path></g>
+<g class="sway" style="animation-duration: 7.6s; animation-delay: -1s"><path d="M360 650C376 580 346 520 366 450C380 400 356 350 368 300" fill="none" stroke-width="10" stroke-linecap="round" style="stroke: var(--td-kelp)"></path><path d="M366 500C352 492 344 478 344 462M364 400C378 390 384 378 384 362" fill="none" stroke-width="7" stroke-linecap="round" style="stroke: var(--td-kelp)"></path></g>
+<sc-for list="{{threads}}" as="th" hint-placeholder-count="3">
+<g style="transform: translate({{th.bx}}px, {{th.by}}px)"><g class="bob" style="animation-delay: {{th.dl}}s">
+<circle r="{{th.br}}" style="fill: var(--td-bub); stroke: var(--td-bubRim)" stroke-width="1.5"></circle>
+<path d="{{th.shine}}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".8"></path>
+<text x="0" y="-2" text-anchor="middle" style="font-family: var(--display); font-weight: 600; font-size: 11.5px; fill: var(--ink)">{{th.l1}}</text>
+<text x="0" y="12" text-anchor="middle" style="font-family: var(--display); font-weight: 600; font-size: 11.5px; fill: var(--ink)">{{th.l2}}</text>
+<text x="0" y="26" text-anchor="middle" style="font-family: var(--mono); font-size: 8.5px; fill: var(--ink2)">{{th.state}}</text>
+</g></g>
+</sc-for>
+<path d="M-10 610C80 596 160 606 230 598C300 590 350 600 400 594V844H-10Z" style="fill: var(--td-sand)"></path>
+<path d="M20 640C60 634 100 642 140 636M220 650C260 644 300 652 350 644M60 700C110 694 160 702 210 696" fill="none" stroke-width="2" stroke-linecap="round" style="stroke: var(--td-sand2)"></path>
+<path d="M300 606C300 584 312 572 322 566M322 606C324 590 336 582 346 580M312 590C304 580 296 578 290 580" fill="none" stroke-width="7" stroke-linecap="round" style="stroke: var(--td-coral)"></path>
+<path d="M82 610C82 596 74 586 66 582M82 600C88 590 98 586 106 586" fill="none" stroke-width="6" stroke-linecap="round" style="stroke: var(--td-coral2)"></path>
+<ellipse cx="44" cy="612" rx="26" ry="11" style="fill: var(--td-rock)"></ellipse>
+<g transform="translate(262 640) rotate(14)"><path d="M0 -12L3 -4L12 -4L5 2L8 11L0 5L-8 11L-5 2L-12 -4L-3 -4Z" fill="#F2A35E"></path></g>
+<path d="M98 560C100 488 290 488 292 560C250 548 140 548 98 560Z" style="fill: var(--td-shell)"></path>
+<path d="M118 552C140 510 160 500 195 498M150 548C164 516 178 504 195 500M240 548C226 516 212 504 195 500M272 552C250 510 230 500 195 498" fill="none" stroke-width="2" style="stroke: var(--td-shell2)"></path>
+<path d="M86 600C96 626 294 626 304 600C290 584 100 584 86 600Z" style="fill: var(--td-shell2)"></path>
+<sc-if value="{{petOn}}" hint-placeholder-val="{{ true }}">
+<g style="transform: translate(0px, 436px)"><g class="swim">
+<path d="M-18 0L-33 -12L-30 0L-33 12Z" fill="#E8792A"></path>
+<ellipse cx="0" cy="0" rx="20" ry="14.5" fill="#F59A3E"></ellipse>
+<path d="M-7 -13.5C-3 -5 -3 5 -7 13.5M7 -13C10 -5 10 5 7 13" fill="none" stroke="#fff" stroke-width="3.6"></path>
+<path d="M-6 -13C0 -23 9 -21 11 -12Z" fill="#E8792A"></path>
+<circle cx="12" cy="-3" r="3.3" fill="#1A120D"></circle><circle cx="12.8" cy="-4" r="1.1" fill="#fff"></circle>
+<path d="M19 3Q17 5.5 14.5 4.5" fill="none" stroke="#7A3A12" stroke-width="1.3" stroke-linecap="round"></path>
+</g></g>
+</sc-if>
+</g>
+</sc-if>
+
+<!-- ============ THE ROLL ============ -->
+<g style="transform: translate({{hero.x}}px, {{hero.y}}px) scale({{hero.s}})">
+<g class="{{landCls}}" style="transform-box: fill-box; transform-origin: 50% 100%">
+<g class="{{heroMotion}}">
+<ellipse cx="100" cy="152" rx="80" ry="10" fill="rgba(30,15,6,.22)"></ellipse>
+<g class="breathe">
+<path d="M22 66C22 124 52 148 100 148C148 148 178 124 178 66Z" fill="#C98A4B"></path>
+<path d="M28 90C36 126 66 140 100 140C134 140 164 126 172 90M24 76C30 118 60 134 100 134" fill="none" stroke="#AD6F38" stroke-width="2.2" opacity=".55" stroke-linecap="round"></path>
+<ellipse cx="100" cy="64" rx="78" ry="42" fill="#E9B275"></ellipse>
+<ellipse cx="96" cy="58" rx="66" ry="32" fill="#F3C98E" opacity=".55"></ellipse>
+<path d="{{swirlBody}}" fill="#8A4320"></path>
+<path class="trace" d="{{swirlTrace}}" pathLength="1" fill="none" stroke="#C1601F" stroke-width="{{swirlFreshW}}" stroke-linecap="round" opacity=".95"></path>
+<sc-for list="{{sugar}}" as="sg" hint-placeholder-count="2"><path d="M0 -6C.7 -1.4 1.4 -.7 6 0C1.4 .7 .7 1.4 0 6C-.7 1.4 -1.4 .7 -6 0C-1.4 -.7 -.7 -1.4 0 -6Z" fill="#FFF8EC" style="transform: translate({{sg.x}}px, {{sg.y}}px)"></path></sc-for>
+<g style="transform: translate({{tip.x}}px, {{tip.y}}px)"><circle class="tipglow" r="7" fill="#FF8A3D" opacity=".55"></circle><circle r="3.4" fill="#FF8A3D"></circle></g>
+<sc-if value="{{icing}}" hint-placeholder-val="{{ true }}"><path d="M36 60C52 44 70 82 92 52C108 32 124 80 146 50C156 40 166 52 168 60" fill="none" stroke="#FFF6EA" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></path></sc-if>
+<sc-if value="{{leafHat}}" hint-placeholder-val="{{ false }}"><g transform="translate(58 28) rotate(-24)"><path d="M0 0C10 -18 34 -18 42 -6C30 6 10 8 0 0Z" fill="#5E9A45"></path><path d="M2 -1C14 -6 26 -8 40 -6" fill="none" stroke="#3F6E36" stroke-width="1.6"></path></g></sc-if>
+<ellipse cx="62" cy="114" rx="9" ry="4.6" fill="#E8806A" opacity=".45"></ellipse><ellipse cx="138" cy="114" rx="9" ry="4.6" fill="#E8806A" opacity=".45"></ellipse>
+<sc-if value="{{eyesOpen}}" hint-placeholder-val="{{ true }}">
+<ellipse cx="76" cy="102" rx="7" ry="9" fill="#2B150A"></ellipse><ellipse cx="124" cy="102" rx="7" ry="9" fill="#2B150A"></ellipse>
+<circle cx="{{eyeHi.l}}" cy="{{eyeHi.y}}" r="2.6" fill="#fff"></circle><circle cx="{{eyeHi.r}}" cy="{{eyeHi.y}}" r="2.6" fill="#fff"></circle>
+</sc-if>
+<path d="{{faceD}}" fill="none" stroke="#2B150A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>
+</g>
+<sc-if value="{{steamOn}}" hint-placeholder-val="{{ true }}"><g class="steam" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="3" stroke-linecap="round"><path d="M74 20C66 6 82 -4 74 -18"></path><path d="M102 14C94 0 110 -10 102 -24" style="animation-delay: -.9s"></path><path d="M130 20C122 6 138 -4 130 -18" style="animation-delay: -1.8s"></path></g></sc-if>
+<sc-if value="{{asleep}}" hint-placeholder-val="{{ false }}"><g style="font-family: var(--display); font-weight: 700; fill: var(--ink2)"><text class="zz" x="160" y="20" font-size="20">z</text><text class="zz" x="176" y="0" font-size="15" style="animation-delay: -1.2s">z</text></g></sc-if>
+<sc-if value="{{helmet}}" hint-placeholder-val="{{ false }}">
+<circle cx="100" cy="86" r="100" style="fill: var(--sp-glass); stroke: var(--sp-rim)" stroke-width="4"></circle>
+<path d="M38 40C56 10 96 -4 132 4" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".55"></path>
+<path d="M18 150C40 176 160 176 182 150" fill="none" stroke-width="12" stroke-linecap="round" style="stroke: var(--sp-sat)"></path>
+</sc-if>
+</g>
+</g>
+</g>
+</svg>
+
+<div class="amb {{ambCls}}" aria-hidden="true"><sc-for list="{{amb}}" as="a" hint-placeholder-count="12"><i style="left: {{a.x}}px; top: {{a.y}}px; width: {{a.s}}px; height: {{a.s}}px; --d: {{a.d}}s; --dl: {{a.dl}}s"></i></sc-for></div>
+
+<button onClick="{{openHistory}}" aria-label="{{heroAria}}" style="position: absolute; left: {{heroHit.x}}px; top: {{heroHit.y}}px; width: {{heroHit.w}}px; height: {{heroHit.h}}px; border-radius: 40%"></button>
+<sc-if value="{{petOn}}" hint-placeholder-val="{{ true }}"><button onClick="{{petTap}}" aria-label="{{petAria}}" style="position: absolute; left: {{petHit.x}}px; top: {{petHit.y}}px; width: {{petHit.w}}px; height: {{petHit.h}}px; border-radius: 30%"></button></sc-if>
+<sc-if value="{{saying}}" hint-placeholder-val="{{ false }}"><div class="say" role="status" style="left: {{sayPos.x}}px; top: {{sayPos.y}}px"><strong style="font-weight: 700">{{petName}}</strong> · {{petLine}}</div></sc-if>
+
+<div style="position: absolute; left: 18px; right: 14px; top: 14px; height: 44px; display: flex; align-items: center; gap: 9px">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="stroke: var(--accent)"><path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8"></path></svg>
+<span class="dsp" style="font-size: calc(23px * var(--dsz)); flex: 1">Cinnamon</span>
+<button class="press mono" onClick="{{toggleLive}}" aria-label="Simulate Brain going offline" style="min-height: 40px; padding: 0 6px; display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--ink2)"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{liveDot}}"></span>{{liveText}}</button>
+</div>
+<div class="rise" style="position: absolute; left: 18px; right: 18px; top: 66px; display: flex; flex-direction: column; gap: 8px">
+<h1 class="dsp" style="margin: 0; font-size: calc(29px * var(--dsz)); line-height: 1.1; text-wrap: balance">{{headline}}</h1>
+<p style="margin: 0; font-size: 13.5px; line-height: 19px; color: var(--ink2); max-width: 330px">{{subline}}</p>
+</div>
+
+<button class="need press" onClick="{{openSheet}}">
+<svg class="bgs" width="366" height="80" viewBox="0 0 366 80" aria-hidden="true">
+<sc-if value="{{isBakery}}" hint-placeholder-val="{{ true }}"><path d="M0 4Q0 0 4 0H362Q366 0 366 4V72L360 80L354 72L348 80L342 72L336 80L330 72L324 80L318 72L312 80L306 72L300 80L294 72L288 80L282 72L276 80L270 72L264 80L258 72L252 80L246 72L240 80L234 72L228 80L222 72L216 80L210 72L204 80L198 72L192 80L186 72L180 80L174 72L168 80L162 72L156 80L150 72L144 80L138 72L132 80L126 72L120 80L114 72L108 80L102 72L96 80L90 72L84 80L78 72L72 80L66 72L60 80L54 72L48 80L42 72L36 80L30 72L24 80L18 72L12 80L6 72L0 80Z" style="fill: var(--bk-paper)" stroke="rgba(0,0,0,.08)"></path><rect width="366" height="6" rx="3" fill="#D2564A"></rect></sc-if>
+<sc-if value="{{isForest}}" hint-placeholder-val="{{ false }}"><path d="M120 0V-30M246 0V-30" stroke-width="2" style="stroke: var(--fs-tagLine)"></path><rect width="366" height="80" rx="14" style="fill: var(--fs-tag)"></rect><path d="M14 24H352M14 56H340" stroke-width="1.2" style="stroke: var(--fs-tagLine)" opacity=".3"></path><circle cx="120" cy="8" r="3" style="fill: var(--fs-tagLine)"></circle><circle cx="246" cy="8" r="3" style="fill: var(--fs-tagLine)"></circle></sc-if>
+<sc-if value="{{isRustic}}" hint-placeholder-val="{{ false }}"><g transform="rotate(-1.2 183 40)"><rect width="366" height="80" rx="3" style="fill: var(--rs-card)"></rect><path d="M0 18H366M0 36H366M0 54H366M0 72H366" stroke-width=".8" style="stroke: var(--rs-cardLine)"></path><circle cx="183" cy="4" r="6" style="fill: var(--rs-red)"></circle></g></sc-if>
+<sc-if value="{{isSpace}}" hint-placeholder-val="{{ false }}"><rect width="366" height="80" rx="22" fill="rgba(14,18,40,.88)" stroke="rgba(169,184,255,.55)" stroke-width="1.5"></rect><g transform="translate(338 40)" fill="none" stroke="#A9B8FF" stroke-width="2" stroke-linecap="round"><path d="M-4 4a6 6 0 0 1 0 -8"></path><path class="signal" d="M-9 9a13 13 0 0 1 0 -18"></path><path class="signal" d="M-14 14a20 20 0 0 1 0 -28" style="animation-delay: .3s"></path></g></sc-if>
+<sc-if value="{{isTide}}" hint-placeholder-val="{{ false }}"><path d="M14 10Q14 0 28 0H300Q316 0 322 14L330 26H350Q358 26 358 34V46Q358 54 350 54H330L322 66Q316 80 300 80H28Q14 80 14 70Z" fill="rgba(220,250,245,.42)" stroke="rgba(255,255,255,.85)" stroke-width="1.6"></path><rect x="350" y="28" width="14" height="24" rx="4" fill="#B9874F"></rect><path d="M40 16Q120 8 200 14" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".6"></path></sc-if>
+</svg>
+<span class="row">
+<span class="knot"><svg width="16" height="16" viewBox="0 0 24 24" fill="#1A120D" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"></path></svg></span>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span class="mono" style="font-size: 10px; letter-spacing: .6px; color: {{needLabelC}}">{{needLabel}}</span><span class="dsp" style="font-size: calc(19px * var(--dsz)); line-height: 1.15; color: {{needInk}}">{{listenTitle}}</span><span style="font-size: 12px; color: {{needInk2}}">5 sentences, blind · about 3 min</span></span>
+</span>
+</button>
+
+<div class="dock">
+<button class="burger press {{burgerCls}}" onClick="{{toggleMenu}}" aria-label="{{burgerAria}}" aria-expanded="{{menuAria}}"><i></i><i></i></button>
+<div style="flex: 1; height: 58px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line); display: flex; align-items: center; padding: 0 8px 0 20px; gap: 10px; box-shadow: 0 8px 20px -10px rgba(10,6,4,.4)">
+<span style="flex: 1; font-size: 15px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{composer}}</span>
+<button class="press" aria-label="Send" style="width: 42px; height: 42px; border-radius: 50%; background: var(--ink); display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="stroke: var(--raise)"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button>
+</div>
+</div>
+
+<div class="wipe {{wipeCls}}" style="background: {{wipeBg}}; clip-path: {{wipeClip}}"></div>
+
+<!-- ============ MENU ============ -->
+<div class="scrim light {{menuCls}}" onClick="{{closeMenu}}"></div>
+<div class="sheet {{menuCls}}" role="dialog" aria-label="Menu" style="height: {{menuH}}px; padding: 10px 14px 20px; display: flex; flex-direction: column; gap: 6px; overflow: hidden">
+<div style="width: 40px; height: 5px; border-radius: 3px; background: var(--line); align-self: center; flex: none"></div>
+<div style="display: flex; align-items: center; gap: 4px; min-height: 48px; flex: none">
+<sc-if value="{{notRoot}}" hint-placeholder-val="{{ false }}"><button class="press" onClick="{{back}}" aria-label="Back to menu" style="width: 40px; height: 44px; display: grid; place-items: center; margin-left: -6px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button></sc-if>
+<span class="dsp" style="font-size: calc(26px * var(--dsz)); flex: 1; padding-left: 4px">{{menuTitle}}</span>
+<button onClick="{{closeMenu}}" style="min-height: 44px; padding: 0 10px; font-weight: 600; font-size: 14px">Done</button>
+</div>
+
+<sc-if value="{{stRoot}}" hint-placeholder-val="{{ true }}">
+<div class="step {{stepDir}}" style="display: flex; flex-direction: column; padding: 0 2px">
+<button class="mrow press" onClick="{{goTheme}}">
+<span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18M5 20V10l7-5 7 5v10M9 20v-5h6v5"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0"><span style="font-weight: 600; font-size: 15.5px">World</span><span class="mono" style="font-size: 11px; color: var(--ink2)">{{worldDetail}}</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="opacity: .45"><path d="M9 5l7 7-7 7"></path></svg>
+</button>
+<div class="mrow">
+<span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 10.5a1.8 1.8 0 1 0 0-3.6a1.8 1.8 0 0 0 0 3.6zM15.5 10.5a1.8 1.8 0 1 0 0-3.6a1.8 1.8 0 0 0 0 3.6zM5 14.5a1.6 1.6 0 1 0 0-3.2a1.6 1.6 0 0 0 0 3.2zM19 14.5a1.6 1.6 0 1 0 0-3.2a1.6 1.6 0 0 0 0 3.2zM12 13c-3 0-5 3.2-5 5c0 1.4 1.3 2 2.6 1.6c.9-.3 1.6-.5 2.4-.5s1.5.2 2.4.5c1.3.4 2.6-.2 2.6-1.6c0-1.8-2-5-5-5z"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-weight: 600; font-size: 15.5px">Companion</span><span class="mono" style="font-size: 11px; color: var(--ink2)">{{petName}} the {{petKind}}</span></span>
+<button class="sw2 {{petOnCls}}" role="switch" aria-checked="{{petAriaOn}}" aria-label="Show companion" onClick="{{togglePet}}"><i></i></button>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+<button class="mrow press" onClick="{{r.go}}">
+<span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{r.icon}}"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0"><span style="font-weight: 600; font-size: 15.5px">{{r.title}}</span><span class="mono" style="font-size: 11px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.detail}}</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="opacity: .45"><path d="M9 5l7 7-7 7"></path></svg>
+</button>
+</sc-for>
+<div class="mrow">
+<span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-weight: 600; font-size: 15.5px">Quiet hours</span><span class="mono" style="font-size: 11px; color: var(--ink2)">23:00–07:00 · approvals still ring</span></span>
+<button class="sw2 {{quietOn}}" role="switch" aria-checked="{{quietAria}}" aria-label="Quiet hours" onClick="{{toggleQuiet}}"><i></i></button>
+</div>
+<div class="mrow">
+<span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-weight: 600; font-size: 15.5px">Connection</span><span class="mono" style="font-size: 11px; color: var(--ink2)">{{connText}}</span></span>
+<span style="width: 8px; height: 8px; border-radius: 50%; background: {{liveDot}}; margin-right: 12px"></span>
+</div>
+<button class="press {{signCls}}" onClick="{{signOut}}" style="margin-top: 8px; min-height: 50px; border-radius: 16px; font-weight: 600; font-size: 15px; color: var(--accent); background: var(--bg2)">{{signText}}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{stTheme}}" hint-placeholder-val="{{ false }}">
+<div class="step {{stepDir}}" style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; gap: 10px; overflow-x: auto; margin: 0 -14px; padding: 2px 14px 4px; scrollbar-width: none">
+<sc-for list="{{worlds}}" as="w" hint-placeholder-count="5">
+<button class="world {{w.cls}}" onClick="{{w.go}}" aria-label="{{w.aria}}" style="background: {{w.bg}}; color: {{w.ink}}">
+<svg width="128" height="104" viewBox="0 0 128 104" aria-hidden="true" style="display: block"><rect width="128" height="104" style="fill: {{w.sky}}"></rect><path d="{{w.art}}" style="fill: {{w.artC}}"></path><path d="{{w.art2}}" style="fill: {{w.artC2}}"></path><g transform="translate(64 86) scale(.26) translate(-100 -150)"><path d="M22 66C22 124 52 148 100 148C148 148 178 124 178 66Z" fill="#C98A4B"></path><ellipse cx="100" cy="64" rx="78" ry="42" fill="#E9B275"></ellipse><path d="M100 64m-8 0a8 4 0 1 1 16 0a16 8 0 1 1 -32 0a26 13 0 1 1 52 0a38 19 0 1 1 -76 0" fill="none" stroke="#8A4320" stroke-width="7"></path><ellipse cx="76" cy="102" rx="7" ry="9" fill="#2B150A"></ellipse><ellipse cx="124" cy="102" rx="7" ry="9" fill="#2B150A"></ellipse></g></svg>
+<span style="padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 2px"><span style="font-family: {{w.font}}; font-weight: {{w.fw}}; font-size: {{w.fs}}px; line-height: 1.05">{{w.name}}</span><span style="font-size: 11px; line-height: 14px; opacity: .8">{{w.where}}</span></span>
+</button>
+</sc-for>
+</div>
+<span style="font-size: 13px; line-height: 18px; color: var(--ink2); padding: 0 4px; min-height: 36px">{{worldLine}}</span>
+<div class="seg3" role="radiogroup" aria-label="Time of day">
+<button class="{{dayOn}}" role="radio" aria-checked="{{dayAria}}" onClick="{{setDay}}">Day</button>
+<button class="{{nightOn}}" role="radio" aria-checked="{{nightAria}}" onClick="{{setNight}}">Night</button>
+<button class="{{autoOn}}" role="radio" aria-checked="{{autoAria}}" onClick="{{setAuto}}">Match phone</button>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 2px 4px 0">
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-weight: 600; font-size: 15px">Showcase</span><span style="font-size: 12px; color: var(--ink2)">Hide names and numbers so you can show it off</span></span>
+<button class="sw2 {{showcaseOn}}" role="switch" aria-checked="{{showcaseAria}}" aria-label="Showcase mode" onClick="{{toggleShowcase}}"><i></i></button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{stQuota}}" hint-placeholder-val="{{ false }}">
+<div class="step {{stepDir}}" style="display: flex; flex-direction: column">
+<sc-for list="{{quota}}" as="q" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 4px; border-top: 1px solid var(--line)">
+<div style="display: flex; align-items: baseline; gap: 8px"><span style="font-weight: 600; font-size: 15.5px; flex: 1">{{q.name}}</span><span class="mono" style="font-size: 11px; color: var(--ink3)">{{q.plan}}</span></div>
+<div style="display: flex; gap: 14px; align-items: flex-end">
+<sc-for list="{{q.g}}" as="gg" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0">
+<svg class="gauge" width="58" height="34" viewBox="0 0 58 34" aria-hidden="true"><path d="M5 30a24 24 0 0 1 48 0" fill="none" stroke-width="6" stroke-linecap="round" style="stroke: var(--line)"></path><path class="v" d="M5 30a24 24 0 0 1 48 0" pathLength="100" fill="none" stroke-width="6" stroke-linecap="round" style="stroke: {{gg.c}}; stroke-dashoffset: {{gg.off}}"></path></svg>
+<span style="display: flex; flex-direction: column; min-width: 0"><span class="mono" style="font-size: 15px; font-weight: 500">{{gg.v}}</span><span style="font-size: 11px; color: var(--ink2); white-space: nowrap">{{gg.label}}</span></span>
+</div>
+</sc-for>
+</div>
+<span class="mono" style="font-size: 10.5px; color: var(--ink3)">{{q.note}}</span>
+</div>
+</sc-for>
+<span style="font-size: 11.5px; line-height: 16px; color: var(--ink3); padding: 10px 4px 0; border-top: 1px solid var(--line)">Each number is what the provider itself reported when Cinnamon asked, today 15 Oct. Cinnamon never estimates quota from its own token counts.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{stRules}}" hint-placeholder-val="{{ false }}">
+<div class="step {{stepDir}}" style="display: flex; flex-direction: column; overflow-y: auto; margin-right: -6px; padding-right: 6px">
+<sc-for list="{{rules}}" as="g" hint-placeholder-count="3">
+<span class="mono" style="font-size: 10.5px; letter-spacing: .5px; color: var(--ink3); padding: 12px 4px 4px">{{g.head}}</span>
+<sc-for list="{{g.items}}" as="it" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px; border-top: 1px solid var(--line)">
+<span style="flex: 1; font-size: 14px; line-height: 19px">{{it.t}}</span>
+<sc-if value="{{it.chip}}" hint-placeholder-val="{{ true }}"><span class="chip {{it.cc}}">{{it.chipText}}</span></sc-if>
+<sc-if value="{{it.sw}}" hint-placeholder-val="{{ false }}"><button class="sw2 {{it.on}}" role="switch" aria-checked="{{it.aria}}" aria-label="{{it.t}}" onClick="{{it.go}}"><i></i></button></sc-if>
+</div>
+</sc-for>
+</sc-for>
+<span style="font-size: 11.5px; line-height: 16px; color: var(--ink3); padding: 12px 4px 4px">Rules with a chip are enforced by Brain and change only from the terminal. The switches are yours.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{stDevices}}" hint-placeholder-val="{{ false }}">
+<div class="step {{stepDir}}" style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 12px; padding: 10px 4px">
+<span class="ico" style="width: 44px; height: 44px; border-radius: 14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 8 3zM11 18h2"></path></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-weight: 600; font-size: 16px">{{devName}} · this phone</span><span class="mono" style="font-size: 11px; color: var(--ink2)">paired Tue 6 · seen Wed 14 · signs approvals</span></span>
+</div>
+<div class="mrow"><span style="flex: 1; font-size: 14px">Notifications</span><span class="mono" style="font-size: 11px; color: var(--finding)">on · web push</span></div>
+<div class="mrow"><span style="flex: 1; font-size: 14px">Earlier pairings</span><span class="mono" style="font-size: 11px; color: var(--ink2)">8 revoked</span></div>
+<button class="press {{signCls}}" onClick="{{signOut}}" style="margin-top: 12px; min-height: 50px; border-radius: 16px; font-weight: 600; font-size: 15px; color: var(--accent); background: var(--bg2)">{{signText}}</button>
+<span style="font-size: 11.5px; line-height: 16px; color: var(--ink3); padding: 6px 4px 0">Signing out forgets this phone's key. Pairing again needs a code from the terminal.</span>
+</div>
+</sc-if>
+</div>
+
+<!-- ============ HISTORY (unrolled) ============ -->
+<div class="scrim {{histCls}}" onClick="{{closeHistory}}"></div>
+<div class="sheet {{histCls}}" role="dialog" aria-label="The roll, unrolled" style="height: 640px; padding: 10px 16px 20px; display: flex; flex-direction: column; gap: 4px">
+<div style="width: 40px; height: 5px; border-radius: 3px; background: var(--line); align-self: center"></div>
+<div style="display: flex; align-items: center; gap: 8px"><span class="dsp" style="font-size: calc(26px * var(--dsz)); flex: 1">Unrolled</span><button onClick="{{closeHistory}}" style="min-height: 44px; padding: 0 8px; font-weight: 600; font-size: 14px">Done</button></div>
+<span style="font-size: 13px; color: var(--ink2)">{{histSub}}</span>
+<sc-if value="{{histOpen}}" hint-placeholder-val="{{ false }}">
+<svg width="358" height="500" viewBox="0 0 390 440" role="img" aria-label="{{histAria}}">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="6"><text x="{{d.x}}" y="{{d.y}}" text-anchor="end" style="font-family: var(--mono); font-size: 9px; fill: var(--ink3)">{{d.label}}</text></sc-for>
+<path d="{{ribD}}" fill="#D9A066"></path>
+<path d="{{ribFreshD}}" fill="#8A4320"></path>
+<path class="trace" d="{{ribTrace}}" pathLength="1" fill="none" stroke="#F3C98E" stroke-width="1.2" stroke-linecap="round"></path>
+<sc-for list="{{flecks}}" as="f" hint-placeholder-count="10"><circle cx="{{f.x}}" cy="{{f.y}}" r="1.9" fill="#3B1E14" opacity=".8"></circle></sc-for>
+<sc-for list="{{ribFind}}" as="rf" hint-placeholder-count="2"><g style="transform: translate({{rf.x}}px, {{rf.y}}px)"><circle r="10" style="fill: var(--raise)"></circle><path d="M0 -7C.8 -1.6 1.6 -.8 7 0C1.6 .8 .8 1.6 0 7C-.8 1.6 -1.6 .8 -7 0C-1.6 -.8 -.8 -1.6 0 -7Z" style="fill: var(--finding)"></path><text x="{{rf.tx}}" y="4" text-anchor="{{rf.ta}}" style="font-family: var(--mono); font-size: 9.5px; fill: var(--finding)">{{rf.label}}</text></g></sc-for>
+<g style="transform: translate({{ribTip.x}}px, {{ribTip.y}}px)"><circle class="tipglow" r="12" fill="#FF8A3D" opacity=".4"></circle><circle r="5" fill="#FF8A3D"></circle><text x="14" y="4" style="font-family: var(--mono); font-size: 9.5px; fill: var(--ink2)">{{tipLabel}}</text></g>
+</svg>
+</sc-if>
+</div>
+
+<!-- ============ LISTENING ============ -->
+<div class="scrim {{sheetCls}}" onClick="{{closeSheet}}"></div>
+<div class="sheet {{sheetCls}}" role="dialog" aria-label="Blind listening test" style="padding: 10px 16px 26px; display: flex; flex-direction: column; gap: 14px">
+<div style="width: 40px; height: 5px; border-radius: 3px; background: var(--line); align-self: center"></div>
+<div style="display: flex; align-items: center; gap: 8px">
+<span class="dsp" style="font-size: calc(26px * var(--dsz)); flex: 1">{{sheetTitle}}</span>
+<button onClick="{{closeSheet}}" aria-label="Close, the test stays waiting" style="width: 44px; height: 44px; display: grid; place-items: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<div style="display: flex; gap: 5px"><sc-for list="{{dots}}" as="dt" hint-placeholder-count="5"><span style="flex: 1; height: 3px; border-radius: 2px; background: {{dt.bg}}"></span></sc-for></div>
+<sc-if value="{{rating}}" hint-placeholder-val="{{ true }}">
+<p class="dsp" style="margin: 0; font-size: calc(20px * var(--dsz)); line-height: 1.3">“{{itemText}}”</p>
+<div style="display: flex; gap: 10px">
+<sc-for list="{{opts}}" as="o" hint-placeholder-count="2">
+<div class="opt {{o.cls}}">
+<div style="display: flex; align-items: center; gap: 8px">
+<button class="press" onClick="{{o.play}}" aria-label="{{o.playLabel}}" style="width: 42px; height: 42px; border-radius: 50%; background: var(--ink); display: grid; place-items: center; flex: none"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="fill: var(--raise)"><path d="{{o.icon}}"></path></svg></button>
+<div class="{{o.waveCls}}"><sc-for list="{{o.bars}}" as="b" hint-placeholder-count="12"><div class="bar" style="height: {{b.h}}px; animation-delay: {{b.d}}ms"></div></sc-for></div>
+</div>
+<button class="press" onClick="{{o.pick}}" style="min-height: 44px; border-radius: 999px; border: 1.5px solid var(--ink); font-weight: 600; font-size: 13px">{{o.label}}</button>
+</div>
+</sc-for>
+</div>
+<span style="font-size: 12px; color: var(--ink3)">Systems stay hidden until all five are rated. Closing keeps the test waiting.</span>
+</sc-if>
+<sc-if value="{{revealed}}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="display: flex; flex-direction: column; gap: 8px">
+<span class="dsp" style="font-size: calc(23px * var(--dsz)); line-height: 1.2">You preferred <em style="color: var(--accent)">V3</em> in {{v3wins}} of 5.</span>
+<sc-for list="{{results}}" as="rr" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; font-size: 13px"><span style="flex: 1">{{rr.text}}</span><span class="mono" style="font-size: 11px; color: var(--finding)">{{rr.meta}}</span></div>
+</sc-for>
+<span class="mono" style="font-size: 10px; color: var(--ink3)">NISQA per clip, read from listen_final_v3_vs_v1.json</span>
+</div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"world":{"editor":"enum","options":["bakery","forest","rustic","space","tide"],"default":"bakery"},"mode":{"editor":"enum","options":["light","dark"],"default":"light"},"mood":{"editor":"enum","options":["needs","working","proud","asleep"],"default":"needs"},"menu":{"editor":"enum","options":["closed","root","theme","quota","rules","devices"],"default":"closed"},"pet":{"editor":"enum","options":["on","off"],"default":"on"},"live":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":390,"height":844}}'>
+const TURNS=[[0.0,37,0],[0.3,17,0],[0.37,4,0],[0.41,8,0],[0.48,1,0],[0.66,0,0],[1.48,5,0],[1.56,3,0],[1.65,4,0],[1.9,4,0],[2.01,1,0],[2.03,2,0],[2.39,8,0],[2.43,2,0],[2.5,0,0],[2.58,0,0],[2.7,0,0],[2.73,0,0],[2.86,7,0],[4.58,0,0],[4.93,0,0],[9.62,2,0],[9.95,2,0],[9.98,3,0],[10.17,5,0],[11.96,4,0],[12.01,6,0],[12.13,3,0],[12.2,1,0],[12.23,2,0],[12.39,5,0],[12.42,3,0],[12.5,3,0],[12.67,4,0],[12.94,3,0],[13.51,3,0],[13.81,3,0],[16.38,0,0],[17.96,0,1],[26.46,0,1],[27.83,2,1],[28.56,10,0],[30.38,1,0],[33.2,63,0],[34.98,2,0],[43.42,20,0],[43.54,6,0],[43.67,4,0],[43.69,1,0],[43.7,4,1],[43.74,4,1],[43.82,0,0],[43.83,8,1],[43.93,4,1],[44.87,5,0],[44.89,0,1],[44.97,3,1],[45.02,7,0],[45.07,3,1],[45.15,3,1],[45.32,9,0],[45.4,0,0],[45.4,45,0],[45.65,1,1],[45.71,6,1],[45.84,3,1],[46.24,3,0],[47.04,3,1],[47.15,1,1],[47.79,3,0],[47.81,0,1],[47.83,2,1],[48.5,1,0],[48.5,2,1],[49.48,3,0],[49.5,2,0],[52.05,10,1],[55.22,4,0],[56.47,7,1],[56.51,7,1],[56.56,10,1],[56.8,1,0],[59.18,1,0],[65.94,3,0],[66.81,3,1],[66.86,5,1],[74.45,15,0],[74.66,1,1],[76.15,2,1],[78.59,1,0],[78.65,3,0],[78.98,18,0],[81.1,2,1],[81.11,1,1],[87.99,2,1],[90.88,4,1],[93.04,2,1],[94.74,2,1],[96.1,2,1],[96.73,1,1],[99.57,2,1],[103.56,2,1],[107.79,2,1],[112.03,2,1],[116.01,1,1],[119.99,1,1],[122.51,2,1],[124.23,2,1],[128.72,2,1],[132.95,2,1],[137.17,2,1],[141.18,5,1],[143.29,4,1],[143.33,1,1],[143.48,2,1],[143.52,15,1],[143.62,6,1],[144.81,2,1],[147.02,3,1],[147.08,1,1]];
+const JOBS=[[0.33,0.37,0],[0.38,0.41,0],[0.38,12.13,0],[0.48,1.48,0],[1.49,1.56,0],[1.57,1.65,0],[1.66,1.9,0],[1.91,2.03,0],[10.0,11.96,1],[10.0,12.2,0],[11.98,12.01,0],[12.04,12.39,1],[12.13,12.23,0],[12.41,12.42,0],[12.44,12.5,0],[12.51,12.66,0],[12.68,12.94,0],[12.96,13.51,1],[13.52,13.81,0],[13.83,17.96,0],[43.68,43.7,1],[43.71,43.74,1],[43.75,43.83,1],[43.85,43.93,0],[43.94,44.89,0],[44.89,44.97,0],[44.98,45.04,0],[45.06,45.07,1],[45.06,45.08,0],[45.08,45.15,0],[45.08,45.33,0],[45.35,45.43,0],[45.35,45.42,0],[45.55,45.65,0],[45.55,45.59,0],[45.58,47.05,0],[45.61,45.71,1],[45.75,45.84,0],[47.05,47.15,0],[47.05,47.8,0],[47.8,47.83,0],[47.8,48.5,0],[48.5,52.05,1],[52.09,56.47,1],[56.48,56.51,1],[56.52,56.56,0],[56.52,81.11,0],[65.94,66.86,0],[65.94,66.81,0],[74.52,74.66,0],[74.52,76.15,0],[76.16,81.1,0],[79.15,143.29,0],[81.11,87.99,0],[88.0,90.88,0],[90.89,93.04,0],[90.89,94.74,0],[93.05,96.1,0],[96.11,96.73,0],[96.11,99.57,0],[99.57,103.56,0],[103.56,107.79,0],[107.8,112.03,0],[112.04,116.01,0],[116.02,119.99,0],[119.99,122.51,1],[122.51,124.23,0],[124.23,128.72,0],[128.72,132.95,0],[132.95,137.17,0],[137.18,141.18,0],[143.3,144.81,0],[143.3,143.33,0],[143.3,143.48,1],[143.3,147.02,1],[143.49,143.52,1],[143.58,143.62,1],[143.64,147.08,0],[147.03,148.5,0],[147.03,148.58,0]];
+const FINDINGS=[[87.99,'60k: WER 13.1%'],[144.81,'200k: WER 3.13%']];
+const ITEMS=[['During their pursuit of the story, Peter and Sabrina clash over virtually everything.',3.86,3.26],['No fixed radio transmitters are allowed within the area closest to the telescope.',2.85,3.88],['Following the release of the album, Black became dubbed the queen of British ska.',3.88,2.88],['The flower depicted on the cover of the single is a kangaroo paw.',2.93,4.95],['During the mission, high quality infrared spectra of Mars were also taken.',4.33,3.91]];
+const THREADS=[['Refinement study','Refinement','evaluating · v9','var(--needs)'],['Branch B · 200k','Branch B','done · v7','#7FA86A'],['V3 full run','V3 full run','done · v5','#B8A898']];
+// Each world: where the roll lives, how threads and the waiting item appear, who keeps it company.
+const WORLDS={
+  bakery:{name:'Bakery',where:'Fresh out of the oven',font:"'Fraunces', serif",fw:650,fs:20,line:'The roll cools on a rack behind the counter. Threads are order tickets on the rail; what needs you is the ticket that says Order up.',
+    hero:[190,568,1],pet:['Crumb','sparrow'],petHit:[300,512,70,56],say:[150,450],need:'ORDER UP',amb:'mote',icing:true,
+    sky:'#F7E7D0',skyN:'#3A2A20',bg:'#FFF6EA',bgN:'#2C2019',ink:'#2A1A10',inkN:'#F6E8D6',art:'M0 72H128V104H0Z',artC:'#C98A55',artCN:'#7A4F2E',art2:'M86 14h30v28h-30z',artC2:'#BFE0F0',artC2N:'#2A3858',
+    lines:['The refinement study has two evals in the oven, 58 min in. Your listening test is up.','Two evals running.']},
+  forest:{name:'Forest',where:'Under the old oak',font:"'Young Serif', serif",fw:400,fs:20,line:'The roll sits on a stump under a great oak. Threads hang as tags from its branch; what needs you is a note nailed up for you.',
+    hero:[150,592,.9],pet:['Hazel','squirrel'],petHit:[280,580,70,74],say:[110,486],need:'A NOTE FOR YOU',amb:'fly',leafHat:true,
+    sky:'#DCEBD8',skyN:'#10201C',bg:'#F8F9F1',bgN:'#18241B',ink:'#1C2619',inkN:'#E6EBDD',art:'M58 104C62 80 60 60 64 40H76C78 60 76 80 82 104Z',artC:'#6E4B32',artCN:'#3B2A1E',art2:'M70 6a30 26 0 1 1 -.1 0ZM36 30a22 20 0 1 1 -.1 0ZM102 28a22 20 0 1 1 -.1 0Z',artC2:'#4F8540',artC2N:'#163021',
+    lines:['I’m holding 2 acorns: two findings, the best is 3.13% WER at 200k. Two evals are running.','Two findings so far.']},
+  rustic:{name:'Rustic',where:'A cabin by the hearth',font:"'Alegreya', serif",fw:800,fs:20,line:'The roll rests on a plate by the fire. Threads are recipe cards pinned to the board; what needs you is a note with a red pin.',
+    hero:[160,604,.92],pet:['Nutmeg','cat'],petHit:[276,566,96,54],say:[120,470],need:'PINNED FOR YOU',amb:'none',
+    sky:'#D8B88C',skyN:'#4A3322',bg:'#FAF4EA',bgN:'#2A1F18',ink:'#2B1D14',inkN:'#F1E4D0',art:'M78 104V54C78 38 120 38 120 54V104Z',artC:'#2A1B12',artCN:'#120A06',art2:'M90 100C90 88 98 86 96 74C104 84 102 92 108 94C110 86 114 82 112 74C120 86 120 96 118 100Z',artC2:'#F0A23A',artC2N:'#F0A23A',
+    lines:['Mrrp. Two evals simmering, 58 min in. There’s a note pinned for you.','Two evals running.']},
+  space:{name:'Space',where:'Out exploring',font:"'Unbounded', sans-serif",fw:500,fs:15,line:'The roll floats in its helmet. Threads are satellites on its orbit; what needs you arrives as a transmission.',
+    hero:[200,552,.74],pet:['Anise','eight-armed alien'],petHit:[282,252,76,104],say:[96,232],need:'INCOMING TRANSMISSION',amb:'none',helmet:true,float:true,
+    sky:'#C9C3F0',skyN:'#0B0E22',bg:'#F8F9FD',bgN:'#141829',ink:'#14172E',inkN:'#E4E8F7',art:'M0 84C40 74 88 74 128 84V104H0Z',artC:'#A99BD6',artCN:'#1B2050',art2:'M40 30a14 14 0 1 1 -.1 0ZM20 44C30 36 70 30 84 34',artC2:'#E58C6A',artC2N:'#C8643F',
+    lines:['Two of my arms are lit: two evals running, 58 min in. A transmission is waiting.','Two arms lit.']},
+  tide:{name:'Tide',where:'Under the sea',font:"'Fredoka', sans-serif",fw:600,fs:20,line:'The roll rests in an open clam. Threads are bubbles, newest highest; what needs you washes up as a bottle.',
+    hero:[195,606,.86],pet:['Saffron','fish'],petHit:[30,404,330,60],say:[60,340],need:'WASHED UP FOR YOU',amb:'bub',
+    sky:'#9ED8DC',skyN:'#082430',bg:'#F2FAFA',bgN:'#0F2D38',ink:'#0B2A33',inkN:'#D8EEF0',art:'M0 82C30 76 70 84 128 78V104H0Z',artC:'#EAD9AF',artCN:'#34464A',art2:'M18 84C10 60 24 44 16 24M110 84C118 60 104 44 112 24',artC2:'#3E8A5C',artC2N:'#164A3A',
+    lines:['Blub. Two evals are running. A bottle washed up for you: a listening test.','Two evals running.']},
+};
+const ORDER=['bakery','forest','rustic','space','tide'];
+const ICONS={quota:'M4 16a8 8 0 1 1 16 0M12 16l4-5',rules:'M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6zM9 12l2 2 4-4',devices:'M8 3h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 8 3zM11 18h2'};
+const MENU_H={root:560,theme:470,quota:520,rules:640,devices:400};
+const TITLES={root:'Menu',theme:'World',quota:'Quota',rules:'Rules',devices:'This phone'};
+const NOW=148.0, SINCE=78.98, N=150, DAY0=12.33, DAYS=['WED 7','THU 8','FRI 9','SAT 10','SUN 11','MON 12'];
+const PLAY='M7 4.5v15l13-7.5z', PAUSE='M6 5h4v14H6zM14 5h4v14h-4z';
+const rnd=(i)=>{const x=Math.sin(i*127.1+311.7)*43758.5453;return x-Math.floor(x);};
+const f1=(v)=>v.toFixed(1);
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { world: null, mode: null, auto: false, pet: null, showcase: false, live: null, menu: null, step: 'root', dir: '', wipe: null, quiet: true, repoCommit: true, adopt: true, sign: 0, hist: false, say: false, land: 0, sheet: false, item: 0, picks: [], playing: null }; this._c = {}; }
+  base() {
+    if (this._b) return this._b;
+    const act = new Array(N).fill(0);
+    const bin = (t) => Math.max(0, Math.min(N - 1, Math.floor(t / NOW * (N - 1))));
+    for (const [t, w] of TURNS) if (t <= NOW) act[bin(t)] += 1 + Math.min(w, 30) / 12;
+    for (const [a, b] of JOBS) { if (a > NOW) continue; act[bin(a)] += .7; for (let i = bin(a); i <= bin(Math.min(b, NOW)); i++) act[i] += .12; }
+    const sm = act.map((_, i) => { let s = 0, ws = 0; for (let k = -3; k <= 3; k++) { const j = i + k; if (j < 0 || j >= N) continue; const w = Math.exp(-k * k / 4); s += act[j] * w; ws += w; } return s / ws; });
+    const mx = Math.max(...sm);
+    const width = sm.map((v, i) => { const s = i / (N - 1); const taper = Math.min(1, s * 14) * Math.min(1, (1 - s) * 30 + .35); return (2.6 + 17 * Math.sqrt(v / mx)) * taper; });
+    const ribbon = []; for (let i = 0; i < N; i++) { const s = i / (N - 1); const A = 100 * Math.pow(1 - s, .8); ribbon.push([195 + A * Math.sin(2 * Math.PI * 1.45 * s + .35), 18 + s * 382]); }
+    // the swirl on top of the roll: the same history, rolled (3 turns, squashed into the top face)
+    const sw = []; const k = 20 / (2 * Math.PI), r0 = 3, rmax = 66; const thMax = (rmax - r0) / k; const L = r0 * thMax + k * thMax * thMax / 2;
+    for (let i = 0; i < N; i++) { const s = i / (N - 1); const l = s * L; const th = (-r0 + Math.sqrt(r0 * r0 + 2 * k * l)) / k; const r = r0 + k * th; const ph = th - thMax + 0.15; sw.push([100 + r * Math.cos(ph), 62 + r * Math.sin(ph) * .5]); }
+    const swW = width.map((w) => .9 + w * .34);
+    this._b = { width, ribbon, sw, swW, iSince: Math.round(SINCE / NOW * (N - 1)), at: (t) => Math.max(0, Math.min(N - 1, t / NOW * (N - 1))) };
+    return this._b;
+  }
+  edges(P, W) { const L = [], R = [];
+    for (let i = 0; i < P.length; i++) { const p = P[Math.max(0, i - 1)], q = P[Math.min(P.length - 1, i + 1)]; let tx = q[0] - p[0], ty = q[1] - p[1]; const n = Math.hypot(tx, ty) || 1; tx /= n; ty /= n; const w = W[i] / 2; L.push([P[i][0] - ty * w, P[i][1] + tx * w]); R.push([P[i][0] + ty * w, P[i][1] - tx * w]); }
+    return { L, R }; }
+  outline(E, a, b) { const pts = E.L.slice(a, b + 1).concat(E.R.slice(a, b + 1).reverse()); return 'M' + pts.map((p) => f1(p[0]) + ' ' + f1(p[1])).join(' L') + ' Z'; }
+  line(P, a, b) { let d = ''; for (let i = a; i <= b; i++) d += (i === a ? 'M' : ' L') + f1(P[i][0]) + ' ' + f1(P[i][1]); return d; }
+  pt(P, f) { const i = Math.floor(f), j = Math.min(P.length - 1, i + 1), u = f - i; return [P[i][0] + (P[j][0] - P[i][0]) * u, P[i][1] + (P[j][1] - P[i][1]) * u]; }
+  bars(seed) { const o = []; for (let i = 0; i < 14; i++) { const v = Math.abs(Math.sin(i * 1.9 + seed) * Math.cos(i * .7 + seed)); o.push({ h: Math.round(6 + v * 22), d: (i * 53) % 300 }); } return o; }
+  statics() {
+    if (this._s) return this._s;
+    let pines = ''; for (let x = -10; x < 400; x += 22) { const y = 452 - Math.sin(x / 40) * 8 - (x > 200 ? (x - 200) * .08 : 0), h = 20 + rnd(x) * 16; pines += 'M' + x + ' ' + f1(y + 4) + 'L' + (x + 9) + ' ' + f1(y - h) + 'L' + (x + 18) + ' ' + f1(y + 4) + 'Z'; }
+    let planks = ''; for (let x = 38; x < 390; x += 39) planks += 'M' + x + ' 0V600';
+    let stones = ''; for (let r = 0; r < 7; r++) { const y = 398 + r * 29; stones += 'M254 ' + y + 'H390'; for (let x = 254 + (r % 2) * 22; x < 390; x += 44) stones += 'M' + x + ' ' + y + 'V' + (y + 29); }
+    let snow = ''; for (let i = 0; i < 26; i++) { const x = 242 + rnd(i) * 118, y = 90 + rnd(i + 40) * 240; snow += 'M' + f1(x) + ' ' + f1(y) + 'h.01'; }
+    const stars = []; for (let i = 0; i < 40; i++) stars.push({ x: f1(rnd(i) * 390), y: f1(rnd(i + 70) * 640), r: rnd(i + 5) > .85 ? 1.6 : .9, c: i % 4 === 0 ? 'twinkle' : '', dl: f1(-rnd(i + 8) * 4) });
+    let gal = ''; for (let arm = 0; arm < 2; arm++) for (let i = 0; i <= 40; i++) { const t = i / 40, th = t * 4.2 + arm * Math.PI, r = 4 + t * 70; gal += (i ? ' L' : 'M') + f1(300 + r * Math.cos(th)) + ' ' + f1(300 + r * Math.sin(th) * .45); }
+    const snowT = []; for (let i = 0; i < 26; i++) snowT.push({ x: f1(rnd(i) * 390), y: f1(rnd(i + 20) * 600), r: f1(.6 + rnd(i + 3) * 1.2) });
+    return (this._s = { pines, planks, stones, snow, stars, gal, snowT });
+  }
+  ambient(kind, dark) {
+    const o = [];
+    if (kind === 'fly') for (let i = 0; i < (dark ? 12 : 8); i++) o.push({ x: f1(30 + rnd(i) * 330), y: f1(330 + rnd(i + 40) * 300), s: dark ? 3 : 2.5, d: f1(6 + rnd(i + 9) * 5), dl: f1(-rnd(i + 3) * 9) });
+    if (kind === 'mote') for (let i = 0; i < 9; i++) o.push({ x: f1(250 + rnd(i) * 110), y: f1(430 + rnd(i + 40) * 90), s: 2.2, d: f1(7 + rnd(i + 9) * 5), dl: f1(-rnd(i + 3) * 9) });
+    if (kind === 'bub') for (let i = 0; i < 10; i++) o.push({ x: f1(i % 2 ? 150 + rnd(i) * 90 : 20 + rnd(i) * 350), y: f1(560 + rnd(i + 40) * 40), s: f1(4 + rnd(i + 4) * 6), d: f1(8 + rnd(i + 9) * 6), dl: f1(-rnd(i + 3) * 12) });
+    return o;
+  }
+  pickWorld(id) {
+    const st = this.state; const cur = st.world || this.props.world || 'bakery'; if (id === cur || st.wipe) return;
+    const dark = this.isDark(); const W = WORLDS[id]; const bg = dark ? W.skyN : W.sky; const oy = 844 - MENU_H.theme;
+    this.setState({ wipe: { bg, c: 'circle(0px at 195px ' + oy + 'px)', ph: '' } });
+    setTimeout(() => this.setState({ wipe: { bg, c: 'circle(1000px at 195px ' + oy + 'px)', ph: '' } }), 30);
+    setTimeout(() => this.setState((s) => ({ world: id, land: s.land + 1, say: false, wipe: { bg, c: 'circle(1000px at 195px ' + oy + 'px)', ph: 'fade' } })), 640);
+    setTimeout(() => this.setState({ wipe: null }), 1100);
+  }
+  isDark() { const st = this.state; if (st.auto) return true; return (st.mode || this.props.mode || 'light') === 'dark'; }
+  renderVals() {
+    const st = this.state;
+    const wid = st.world || this.props.world || 'bakery', W0 = WORLDS[wid];
+    const dark = this.isDark();
+    const petOn = st.pet !== null ? st.pet : this.props.pet !== 'off';
+    const mood = (st.live !== null ? st.live : this.props.live !== 'off') ? (this.props.mood || 'needs') : 'asleep';
+    const menu = st.menu !== null ? st.menu : (this.props.menu && this.props.menu !== 'closed');
+    const step = st.menu !== null ? st.step : (this.props.menu && this.props.menu !== 'closed' ? this.props.menu : 'root');
+    const sc = st.showcase;
+    const live = st.live !== null ? st.live : this.props.live !== 'off';
+    const b = this.base(), S = this.statics();
+    // hero
+    const [hx, hy, hs] = W0.hero;
+    const E = this.edges(b.sw, b.swW);
+    const tipP = b.sw[N - 1];
+    const sugar = FINDINGS.map(([t]) => { const p = this.pt(b.sw, b.at(t)); return { x: f1(p[0]), y: f1(p[1] - 1) }; });
+    const look = mood === 'needs' ? [2.2, 2.6] : mood === 'working' ? [-1.5, -3] : [0, -2];
+    const faceD = { needs: 'M64 86Q72 80 82 84M118 84Q128 80 136 86M95 120Q100 126 105 120Q100 116 95 120Z', working: 'M90 118Q100 126 110 118', proud: 'M66 104Q76 92 86 104M114 104Q124 92 134 104M86 116Q100 132 114 116', asleep: 'M68 104Q76 110 84 104M116 104Q124 110 132 104M94 120Q100 123 106 120' }[mood];
+    // threads by world
+    const threads = THREADS.map(([name, short, state, band], i) => {
+      const nm = sc ? ['Study one', 'Study two', 'Study three'][i] : name, sh = sc ? ['Study one', 'Study two', 'Study three'][i] : short, stt = sc ? (i ? 'done' : 'running') : state;
+      const words = nm.split(' '); const cut = Math.ceil(words.length / 2);
+      const bub = [[205, 296, 46], [312, 374, 38], [92, 392, 40]][i];
+      const sat = [[40, 440], [358, 420], [300, 600]][i];
+      const lw = 112;
+      return { name: nm, short: sh, state: stt, band, x: 16 + i * 124, r: [-2, 1.5, -1][i],
+        fx: [70, 174, 276][i], fy: [384, 398, 388][i], rx: [34, 122, 70][i], ry: [222, 230, 280][i], rr: [-3, 2.5, -1.5][i],
+        bx: bub[0], by: bub[1], br: bub[2], shine: 'M' + f1(-bub[2] * .55) + ' ' + f1(-bub[2] * .35) + 'A' + bub[2] * .7 + ' ' + bub[2] * .7 + ' 0 0 1 ' + f1(-bub[2] * .15) + ' ' + f1(-bub[2] * .66),
+        l1: words.slice(0, cut).join(' '), l2: words.slice(cut).join(' '),
+        sx: sat[0], sy: sat[1], lx: [-32, -100, -64][i], ly: [12, -52, 12][i], lw, tx: [-22, -90, -54][i], ty: [28, -36, 28][i], ty2: [40, -24, 40][i], ta: 'start', dl: f1(-i * 2.3) };
+    });
+    // alien tentacles: one lit tip per running job (2 running)
+    const tents = Array.from({ length: 8 }, (_, i) => { const x0 = -21 + i * 6, sp = (i - 3.5); const ex = x0 + sp * 6, ey = 34 + Math.abs(sp) * -1.5; return { d: 'M' + x0 + ' 2C' + f1(x0 + sp * 2) + ' 14 ' + f1(x0 + sp * 6 + (i % 2 ? 6 : -6)) + ' 22 ' + f1(ex) + ' ' + f1(ey), ex: f1(ex), ey: f1(ey), r: (i === 2 || i === 5) ? 4.4 : 3.2, c: (i === 2 || i === 5) ? '#FFD27A' : '#B8ABFF', dl: f1(-i * .3) }; });
+    // pet + cat
+    const catNeeds = mood === 'needs';
+    const earsD = catNeeds ? 'M-33 -27L-34 -42L-23 -31ZM-18 -31L-12 -44L-10 -28Z' : 'M-34 -28L-37 -38L-26 -31ZM-20 -32L-15 -40L-12 -29Z';
+    const catEyes = catNeeds ? 'M-30 -21Q-27 -18 -24 -21M-19 -22.5a2 2.4 0 1 0 .1 0' : 'M-31 -20Q-28 -17 -25 -20M-21 -21Q-18 -18 -15 -21';
+    // history (unrolled)
+    const RE = this.edges(b.ribbon, b.width);
+    const days = DAYS.map((label, i) => { const p = this.pt(b.ribbon, b.at(DAY0 + i * 24)); return { label, x: f1(Math.min(p[0] - 22, 60)), y: f1(p[1] + 3) }; });
+    const flecks = JOBS.filter((j) => j[2] && j[0] <= NOW).map((j) => { const p = this.pt(b.ribbon, b.at(j[0])); return { x: f1(p[0]), y: f1(p[1]) }; });
+    const ribFind = FINDINGS.map(([t, label]) => { const p = this.pt(b.ribbon, b.at(t)); return { x: f1(p[0]), y: f1(p[1]), label: sc ? 'a finding' : label, tx: p[0] > 195 ? -16 : 16, ta: p[0] > 195 ? 'end' : 'start' }; });
+    const ribTip = this.pt(b.ribbon, N - 1);
+    // listening
+    const opts = ['A', 'B'].map((Lb, k) => { const playing = st.playing === Lb;
+      return { label: (st.picks[st.item] === Lb ? 'Preferred ' : 'Prefer ') + Lb, cls: st.picks[st.item] === Lb ? 'is-picked' : '', icon: playing ? PAUSE : PLAY,
+        playLabel: (playing ? 'Pause ' : 'Play ') + 'sample ' + Lb, waveCls: playing ? 'wave is-playing' : 'wave', bars: this.bars(k * 3 + st.item),
+        play: () => this.setState({ playing: playing ? null : Lb }),
+        pick: () => { const picks = st.picks.slice(); picks[st.item] = Lb; this.setState({ picks, playing: null }); setTimeout(() => this.setState((s) => ({ item: Math.min(s.item + 1, 5) })), 260); } }; });
+    const results = ITEMS.map(([text, v3, v1], i) => { const pickedV3 = (st.picks[i] === 'A') === (i % 2 === 0); return { text: (pickedV3 ? 'V3 · ' : 'V1 · ') + text.slice(0, 32) + '…', meta: 'V3 ' + v3.toFixed(2) + ' · V1 ' + v1.toFixed(2) }; });
+    const done = st.item >= 5;
+    const sinceJobs = JOBS.filter((j) => j[0] > SINCE && j[0] <= NOW).length, sinceWakes = TURNS.filter((t) => t[0] > SINCE && t[0] <= NOW && t[2]).length;
+    // menu data
+    const modeK = st.auto ? 'auto' : dark ? 'night' : 'day';
+    const rows = [
+      { title: 'Quota', detail: sc ? 'three providers' : 'Claude 21% of week · Codex 0% · Antigravity 0%', icon: ICONS.quota, go: () => this.setState({ step: 'quota', dir: '' }) },
+      { title: 'Rules', detail: '9 rules · 4 ask you · 2 yours', icon: ICONS.rules, go: () => this.setState({ step: 'rules', dir: '' }) },
+      { title: 'This phone', detail: (sc ? 'this phone' : 'K') + ' · notifications on · sign out', icon: ICONS.devices, go: () => this.setState({ step: 'devices', dir: '' }) },
+    ];
+    const worlds = ORDER.map((id) => { const w = WORLDS[id]; return { name: w.name, where: w.where + ' · ' + w.pet[0], font: w.font, fw: w.fw, fs: w.fs,
+      bg: dark ? w.bgN : w.bg, ink: dark ? w.inkN : w.ink, sky: dark ? w.skyN : w.sky, art: w.art, artC: dark ? w.artCN : w.artC, art2: w.art2, artC2: dark ? w.artC2N : w.artC2,
+      cls: id === wid ? 'sel' : '', aria: w.name + ' world, ' + w.where + (id === wid ? ', selected' : ''), go: () => this.pickWorld(id) }; });
+    const gauge = (v, label) => ({ v: v + '%', label, off: (100 - v).toFixed(0), c: v >= 80 ? 'var(--needs)' : 'var(--accent)' });
+    const quota = [
+      { name: 'Claude Code', plan: sc ? '' : 'team plan', g: [gauge(4, '5 h · resets 12:39'), gauge(21, 'week · resets Sun 00:29')], note: 'Fable weekly 0% · from Claude’s usage report' },
+      { name: 'Codex', plan: sc ? '' : 'plus plan', g: [gauge(0, '5 h window'), gauge(0, 'week')], note: '3 reset credits · from Codex app-server' },
+      { name: 'Antigravity', plan: '', g: [gauge(0, 'Gemini · week'), gauge(0, 'Claude & GPT · week')], note: 'credits 0 · from agy /usage' },
+    ];
+    const rule = (t, cc, chipText) => ({ t, chip: true, cc, chipText, sw: false });
+    const mine = (t, on, key) => ({ t, chip: false, sw: true, on: on ? 'on' : '', aria: on ? 'true' : 'false', go: () => this.setState({ [key]: !on }) });
+    const rules = [
+      { head: 'HOW CODE CHANGES', items: [rule('Threads run on frozen code; code changes go to the repo session as requests', 'no', 'always'), mine('The repo session commits inside the repo without asking', st.repoCommit, 'repoCommit'), mine('A thread moves to a new code version on its own, and says why', st.adopt, 'adopt')] },
+      { head: 'BRAIN ASKS YOU FIRST', items: [rule('Writing outside the repo and its vault', 'ask', 'asks you'), rule('Pushing to main or master', 'ask', 'asks you'), rule('Deleting vaults or checkpoints', 'ask', 'asks you'), rule('Global installs, git config, crontab', 'ask', 'asks you')] },
+      { head: 'NEVER ON THE LOGIN NODE', items: [rule('Detached processes, tmux, sleep and squeue loops', 'no', 'blocked'), rule('Reading Brain’s keys and tokens', 'no', 'blocked')] },
+    ];
+    const darkPanel = wid === 'space';
+    const wipe = st.wipe;
+    return {
+      rootCls: 'w-' + wid + (dark ? ' dark' : '') + (live ? ' live' : ''),
+      isBakery: wid === 'bakery', isForest: wid === 'forest', isRustic: wid === 'rustic', isSpace: wid === 'space', isTide: wid === 'tide',
+      sceneLabel: W0.name + ': ' + W0.line,
+      pinesD: S.pines, planksD: S.planks, stonesD: S.stones, snowD: S.snow, stars: S.stars, galaxyD: S.gal, snow: dark ? S.snowT : [],
+      threads, tents, earsD, catEyes, petOn,
+      hero: { x: f1(hx - 100 * hs), y: f1(hy - 150 * hs), s: hs }, landCls: st.land % 2 ? 'landB' : 'landA', heroMotion: W0.float ? 'float' : '',
+      heroHit: { x: f1(hx - 90 * hs), y: f1(hy - 150 * hs), w: f1(180 * hs), h: f1(150 * hs) },
+      swirlBody: this.outline(E, 0, N - 1), swirlTrace: this.line(b.sw, b.iSince, N - 2), swirlFreshW: 3.2, sugar, tip: { x: f1(tipP[0]), y: f1(tipP[1]) },
+      icing: !!W0.icing, leafHat: !!W0.leafHat, helmet: !!W0.helmet,
+      eyesOpen: mood === 'needs' || mood === 'working', eyeHi: { l: f1(76 + look[0]), r: f1(124 + look[0]), y: f1(102 + look[1]) }, faceD,
+      steamOn: mood === 'working' || mood === 'needs' ? !W0.helmet && wid !== 'tide' : false, asleep: mood === 'asleep',
+      heroAria: (sc ? 'The roll' : 'The EDIT TTS roll') + ': its swirl is the project history. Tap to unroll it.',
+      ambCls: W0.amb === 'fly' ? 'amb-fly' + (dark ? '' : ' day') : W0.amb === 'mote' ? 'amb-mote' : W0.amb === 'bub' ? 'amb-bub' : '', amb: this.ambient(W0.amb, dark),
+      petName: W0.pet[0], petKind: W0.pet[1], petAria: W0.pet[0] + ' the ' + W0.pet[1] + ': tap for a status line',
+      petHit: { x: W0.petHit[0], y: W0.petHit[1], w: W0.petHit[2], h: W0.petHit[3] }, sayPos: { x: W0.say[0], y: W0.say[1] }, saying: st.say && petOn,
+      petLine: sc ? W0.lines[1] : W0.lines[0], petTap: () => { this.setState({ say: !st.say }); clearTimeout(this._say); this._say = setTimeout(() => this.setState({ say: false }), 5000); },
+      petOnCls: petOn ? 'on' : '', petAriaOn: petOn ? 'true' : 'false', togglePet: () => this.setState({ pet: !petOn, say: false }),
+      toggleLive: () => this.setState({ live: !live }), liveDot: live ? 'var(--finding)' : 'var(--ink3)', liveText: live ? 'live' : 'as of 14 min ago',
+      headline: sc ? 'Your agent is evaluating both arms of an experiment.' : 'The refinement study is evaluating both of its arms.',
+      subline: sc ? 'Busy while you were away. One thing is waiting for you.' : 'EDIT TTS · since you left on Fri 9: ' + sinceJobs + ' jobs, ' + sinceWakes + ' self-wakes, one listening test for you.',
+      needLabel: W0.need, needLabelC: darkPanel ? '#A9B8FF' : '#8A6F5A', needInk: darkPanel ? '#E4E8F7' : (wid === 'tide' ? 'var(--ink)' : '#2A1A10'), needInk2: darkPanel ? '#A8B0CC' : (wid === 'tide' ? 'var(--ink2)' : '#5E4636'),
+      listenTitle: sc ? 'A listening test' : 'Listen: V3 at 200k vs V1', composer: sc ? 'Tell the thread…' : 'Tell the refinement study…',
+      // history
+      histCls: st.hist ? 'on' : '', histOpen: st.hist, openHistory: () => this.setState({ hist: true, menu: false, say: false }), closeHistory: () => this.setState({ hist: false }),
+      histSub: sc ? 'The roll’s swirl, laid flat: thicker where the agent was busy.' : 'EDIT TTS since Tue 6, laid flat: thicker where the agent was busy, flecked where jobs failed, darker since you left.',
+      histAria: 'EDIT TTS history unrolled: 122 turns and 80 jobs', days, flecks, ribFind, ribTip: { x: f1(ribTip[0]), y: f1(ribTip[1]) },
+      ribD: this.outline(RE, 0, N - 1), ribFreshD: this.outline(RE, b.iSince, N - 1), ribTrace: this.line(b.ribbon, b.iSince, N - 2), tipLabel: sc ? 'NOW' : 'NOW · 2 EVALS · 58 MIN',
+      // menu
+      menuCls: menu ? 'on' : '', burgerCls: menu ? 'open' : '', burgerAria: menu ? 'Close menu' : 'Open menu', menuAria: menu ? 'true' : 'false',
+      toggleMenu: () => this.setState({ menu: !menu, step: 'root', dir: '', sign: 0, say: false }), closeMenu: () => this.setState({ menu: false, sign: 0 }),
+      menuH: MENU_H[step], menuTitle: TITLES[step], notRoot: step !== 'root', back: () => this.setState({ step: 'root', dir: 'back', sign: 0 }), stepDir: st.dir,
+      stRoot: step === 'root', stTheme: step === 'theme', stQuota: step === 'quota', stRules: step === 'rules', stDevices: step === 'devices',
+      goTheme: () => this.setState({ step: 'theme', dir: '' }), worldDetail: W0.name + ' · ' + (st.auto ? 'matches phone' : dark ? 'night' : 'day') + (sc ? ' · showcase' : ''),
+      rows, quietOn: st.quiet ? 'on' : '', quietAria: st.quiet ? 'true' : 'false', toggleQuiet: () => this.setState({ quiet: !st.quiet }),
+      connText: live ? 'named tunnel · live · 41 ms' : 'Brain unreachable · retrying',
+      signText: st.sign === 1 ? 'Tap again to sign out' : st.sign === 2 ? 'Signed out (mock)' : 'Sign out of this phone', signCls: st.sign === 1 ? 'out' : '',
+      signOut: () => { if (st.sign === 0) { this.setState({ sign: 1 }); clearTimeout(this._st); this._st = setTimeout(() => this.setState((s) => ({ sign: s.sign === 1 ? 0 : s.sign })), 3000); } else if (st.sign === 1) this.setState({ sign: 2 }); },
+      worlds, worldLine: W0.line,
+      dayOn: modeK === 'day' ? 'on' : '', nightOn: modeK === 'night' ? 'on' : '', autoOn: modeK === 'auto' ? 'on' : '',
+      dayAria: modeK === 'day' ? 'true' : 'false', nightAria: modeK === 'night' ? 'true' : 'false', autoAria: modeK === 'auto' ? 'true' : 'false',
+      setDay: () => this.setState({ mode: 'light', auto: false }), setNight: () => this.setState({ mode: 'dark', auto: false }), setAuto: () => this.setState({ auto: true }),
+      showcaseOn: sc ? 'on' : '', showcaseAria: sc ? 'true' : 'false', toggleShowcase: () => this.setState({ showcase: !sc }),
+      quota, rules, devName: sc ? 'Phone' : 'K',
+      wipeCls: wipe ? wipe.ph : '', wipeBg: wipe ? wipe.bg : 'transparent', wipeClip: wipe ? wipe.c : 'circle(0px at 195px 400px)',
+      // listening
+      sheetCls: st.sheet ? 'on' : '', openSheet: () => this.setState({ sheet: true, menu: false, say: false }), closeSheet: () => this.setState({ sheet: false, playing: null }),
+      sheetTitle: done ? 'Revealed' : 'Which sounds better?',
+      dots: [0, 1, 2, 3, 4].map((i) => ({ bg: i < st.item ? 'var(--accent)' : i === st.item && !done ? 'var(--ink)' : 'var(--line)' })),
+      rating: !done, revealed: done, itemText: done ? '' : ITEMS[st.item][0], opts, results,
+      v3wins: results.filter((r) => r.text.startsWith('V3')).length,
+    };
+  }
+}
+</script>
+</body>
+</html>
