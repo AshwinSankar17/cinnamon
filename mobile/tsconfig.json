@@ -16,6 +16,7 @@
   ],
   "exclude": [
     "node_modules",
+    "src/**/*.test.ts",
     "android",
     "ios",
     "app.config.ts",

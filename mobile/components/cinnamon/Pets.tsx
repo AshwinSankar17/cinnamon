@@ -2,14 +2,15 @@
  * One companion per world (spec §7.2), switched on or off from the menu. Drawn from the mockup; each idles with one
  * transform loop while live. They only restate verified counts: Anise lights one arm per running job (max 8),
  * Hazel holds one acorn per finding (none exist until findings land), Nutmeg's ears go up when something waits.
+ * Each is the owner's assistant: a badge counts what needs them, and a tap opens their list (Briefing.tsx).
  */
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable } from 'react-native';
+import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
 import type { WorldId } from '@/src/worlds';
 import { at, type Frame } from './frame';
 
-type Props = { world: WorldId; f: Frame; live: boolean; running: number; needs: boolean; label: string; onPress: () => void };
+type Props = { world: WorldId; f: Frame; live: boolean; running: number; needs: boolean; badge: { n: number; color: string } | null; label: string; onPress: () => void };
 
 /** Design-space anchor (feet / centre) and drawing box for each pet: [x, y, boxW, boxH, boxOx, boxOy]. */
 const PLACE: Record<WorldId, [number, number, number, number, number, number]> = {
@@ -34,7 +35,7 @@ function useIdle(live: boolean, ms: number) {
   return v;
 }
 
-export function Pet({ world, f, live, running, needs, label, onPress }: Props) {
+export function Pet({ world, f, live, running, needs, badge, label, onPress }: Props) {
   const [x, y, w, h, bx, by] = PLACE[world];
   const idle = useIdle(live, world === 'tide' ? 16000 : world === 'space' ? 6500 : world === 'rustic' ? 3600 : world === 'forest' ? 2600 : 3400);
   const p = at(f, x + bx, y + by);
@@ -138,16 +139,13 @@ export function Pet({ world, f, live, running, needs, label, onPress }: Props) {
             </G>
           ) : null}
         </Svg>
+        {badge ? (
+          <View pointerEvents="none" style={{ position: 'absolute', right: -4, top: -6, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5,
+                                             backgroundColor: badge.color, borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#1A120D' }}>{badge.n > 9 ? '9+' : badge.n}</Text>
+          </View>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
 }
-
-/** Where the companion's speech bubble sits (design units, top-left). */
-export const SAY_AT: Record<WorldId, [number, number]> = {
-  bakery: [150, 450],
-  forest: [110, 486],
-  rustic: [120, 470],
-  space: [96, 232],
-  tide: [60, 340],
-};

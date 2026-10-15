@@ -1,39 +1,55 @@
 /**
  * What needs the owner, at thumb height, in each world's own form (spec §7.2): the ticket that says Order up, a note
  * on twine, a note with a red pin, an incoming transmission, a bottle washed up. Always the same place and the same
- * words; only the material changes. Opens the approval, the listening test or the thread.
+ * words; only the material changes. It carries the top of the ranked list (src/attention.ts) and gets louder with
+ * the rank: only an approval or a thread asking for you pulses. With nothing to do it turns into the companion's quiet
+ * status line. Long-press is "Later" (four hours, this phone only).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
-import type { Waiting } from '@/src/standup';
+import type { Item } from '@/src/attention';
+import { itemDetail, itemTitle } from '@/src/standup';
 import type { Tokens, World } from '@/src/worlds';
 
-type Props = { world: World; t: Tokens; waiting: Waiting; more: number; live: boolean; fonts: { display?: string; mono?: string; ui?: string }; onPress: () => void };
+type Props = { world: World; t: Tokens; item: Item | null; calm: { title: string; detail: string }; more: number; live: boolean; showcase: boolean; petName: string | null;
+                fonts: { display?: string; mono?: string; ui?: string }; onPress: () => void; onLater: () => void };
 
-export function WaitingCard({ world, t, waiting, more, live, fonts, onPress }: Props) {
+const KICKER: Record<Item['kind'], string | null> = { approval: null, needs: null, failed: 'JOB FAILED', listen: 'READY TO LISTEN', news: 'NEWS' };
+const ICON: Record<Item['kind'], string> = { approval: 'M12 4v9M12 18h.01', needs: 'M12 4v9M12 18h.01', failed: 'M7 7l10 10M17 7L7 17', listen: 'M7 4.5v15l13-7.5z', news: 'M12 12h.01' };
+
+export function WaitingCard({ world, t, item, calm, more, live, showcase, petName, fonts, onPress, onLater }: Props) {
   const [w, setW] = useState(366);
   const ring = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!live) return;
+    if (!live || !item || item.tier > 2) return; // only what blocks an agent pulses
     const a = Animated.sequence([Animated.delay(1600), Animated.timing(ring, { toValue: 1, duration: 1600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
                                  Animated.timing(ring, { toValue: 0, duration: 0, useNativeDriver: true }),
                                  Animated.timing(ring, { toValue: 1, duration: 1600, easing: Easing.out(Easing.cubic), useNativeDriver: true })]);
     a.start();
     return () => a.stop();
-  }, [live, ring, waiting.id]);
+  }, [live, ring, item?.key, item?.tier]);
   const space = world.id === 'space';
   const ink = space ? '#E4E8F7' : world.id === 'tide' ? t.ink : '#2A1A10';
   const ink2 = space ? '#A8B0CC' : world.id === 'tide' ? t.ink2 : '#5E4636';
   const kicker = space ? '#A9B8FF' : world.id === 'tide' ? t.ink2 : '#8A6F5A';
-  const h = 66;
+  const h = item ? 66 : 52;
+  const dot = !item ? null : item.tier <= 3 ? t.needs : item.tier === 4 ? t.accent : t.finding;
+  const glyph = item && item.tier <= 3 ? '#1A120D' : t.raise;
+  const kick = [petName?.toUpperCase(), item ? KICKER[item.kind] ?? world.need : null].filter(Boolean).join('  ·  ');
+  const title = item ? itemTitle(item, showcase) : calm.title;
+  const detail = item ? itemDetail(item, showcase) : calm.detail;
   const zig = 'M0 4Q0 0 4 0H' + (w - 4) + 'Q' + w + ' 0 ' + w + ' 4V' + (h - 7) +
     Array.from({ length: Math.floor(w / 12) }, (_, k) => `L${w - 6 - k * 12} ${h}L${w - 12 - k * 12} ${h - 7}`).join('') + `L0 ${h - 7}Z`;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${world.need.toLowerCase()}: ${waiting.title}. ${waiting.detail}${more ? `. ${more} more waiting` : ''}`}
+      accessibilityLabel={item ? `${kick.toLowerCase()}: ${title}. ${detail}${more ? `. ${more} more waiting` : ''}` : `${calm.title} ${calm.detail}`}
+      accessibilityHint={item ? 'Long-press for Later' : 'Opens your list'}
+      accessibilityActions={item ? [{ name: 'activate' }, { name: 'longpress', label: 'Later' }] : undefined}
+      onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'longpress' ? onLater() : onPress())}
       onPress={onPress}
+      onLongPress={item ? onLater : undefined}
       onLayout={(e) => setW(Math.max(200, Math.round(e.nativeEvent.layout.width)))}
       style={({ pressed }) => ({ height: h, transform: [{ scale: pressed ? 0.97 : 1 }] })}
     >
@@ -48,15 +64,15 @@ export function WaitingCard({ world, t, waiting, more, live, fonts, onPress }: P
           <G>
             <Rect width={w} height={h} rx={14} fill={t.sTag} />
             <Path d={`M14 20H${w - 14}M14 ${h - 14}H${w - 26}`} stroke={t.sTagLine} strokeWidth={1.2} opacity={0.3} />
-            <Circle cx={w / 3} cy={8} r={3} fill={t.sTagLine} />
-            <Circle cx={(2 * w) / 3} cy={8} r={3} fill={t.sTagLine} />
+            <Circle cx={w / 3} cy={5} r={2.5} fill={t.sTagLine} />
+            <Circle cx={(2 * w) / 3} cy={5} r={2.5} fill={t.sTagLine} />
           </G>
         ) : null}
         {world.id === 'rustic' ? (
           <G>
             <Rect width={w} height={h} rx={3} fill={t.sCard} />
             <Path d={`M0 16H${w}M0 32H${w}M0 48H${w}`} stroke={t.sCardLine} strokeWidth={0.8} />
-            <Circle cx={w / 2} cy={4} r={6} fill={t.sRed} />
+            <Circle cx={w - 14} cy={9} r={6} fill={t.sRed} />
           </G>
         ) : null}
         {space ? (
@@ -77,24 +93,28 @@ export function WaitingCard({ world, t, waiting, more, live, fonts, onPress }: P
           </G>
         ) : null}
       </Svg>
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: world.id === 'tide' ? 28 : 14, paddingRight: 18 }}>
-        <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: t.needs, alignItems: 'center', justifyContent: 'center' }}>
-          <Animated.View
-            style={{ position: 'absolute', width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: t.needs,
-                     opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] }),
-                     transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.25] }) }] }}
-          />
-          <Svg width={16} height={16} viewBox="0 0 24 24">
-            <Path d={waiting.kind === 'listen' ? 'M7 4.5v15l13-7.5z' : 'M12 4v9M12 18h.01'} fill={waiting.kind === 'listen' ? '#1A120D' : 'none'}
-              stroke="#1A120D" strokeWidth={waiting.kind === 'listen' ? 0 : 2.6} strokeLinecap="round" />
-          </Svg>
-        </View>
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: world.id === 'tide' ? 28 : 14, paddingRight: space ? 50 : world.id === 'tide' ? 52 : 26 }}>
+        {item && dot ? (
+          <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: dot, alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.View
+              style={{ position: 'absolute', width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: dot,
+                       opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [item.tier <= 2 ? 0.8 : 0, 0] }),
+                       transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.25] }) }] }}
+            />
+            <Svg width={16} height={16} viewBox="0 0 24 24">
+              <Path d={ICON[item.kind]} fill={item.kind === 'listen' ? glyph : 'none'} stroke={glyph}
+                strokeWidth={item.kind === 'listen' ? 0 : item.kind === 'news' ? 7 : 2.6} strokeLinecap="round" />
+            </Svg>
+          </View>
+        ) : null}
         <View style={{ flex: 1, gap: 1 }}>
-          <Text numberOfLines={1} style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.6, color: kicker }}>
-            {world.need}{more ? `  ·  +${more} MORE` : ''}
-          </Text>
-          <Text numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 16.5 * world.displayScale, color: ink }}>{waiting.title}</Text>
-          <Text numberOfLines={1} style={{ fontFamily: fonts.ui, fontSize: 11.5, color: ink2 }}>{waiting.detail}</Text>
+          {item ? (
+            <Text numberOfLines={1} style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.6, color: kicker }}>
+              {kick}{more ? `  ·  +${more}` : ''}
+            </Text>
+          ) : null}
+          <Text numberOfLines={1} style={{ fontFamily: item ? fonts.display : fonts.ui, fontSize: item ? 16.5 * world.displayScale : 13.5, color: item ? ink : ink2 }}>{title}</Text>
+          {detail ? <Text numberOfLines={1} style={{ fontFamily: fonts.ui, fontSize: 11.5, color: ink2 }}>{detail}</Text> : null}
         </View>
       </View>
     </Pressable>

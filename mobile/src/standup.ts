@@ -4,21 +4,17 @@
  * The last good standup is cached so the home still renders, marked "as of", when Brain is unreachable.
  */
 import { api } from './api';
+import { attention, snooze, type Item } from './attention';
 import type { Activity } from './roll';
 import { getMeta, setMeta } from './store';
 import type { Job, Since, Thread } from './types';
 import type { WorldId } from './worlds';
 
-export type Waiting =
-  | { kind: 'approval'; id: string; title: string; detail: string }
-  | { kind: 'listen'; id: string; title: string; detail: string }
-  | { kind: 'thread'; id: string; title: string; detail: string };
-
 export type Standup = {
   focus: Thread | null;
   threads: Thread[];
-  waiting: Waiting | null;
-  waitingCount: number;
+  items: Item[]; // ranked: items[0] is the waiting card, the whole list is the companion's briefing
+  backlog: { listen: number };
   runningJobs: Job[];
   since: Since;
   activity: Activity | null;
@@ -35,33 +31,34 @@ function pickFocus(threads: Thread[], jobs: Job[]): Thread | null {
   return [...threads].sort((a, b) => order(a) - order(b) || ts(b.updated_at) - ts(a.updated_at))[0] ?? null;
 }
 
-export { headline, subline, petLine } from './standup-text';
+export { headline, subline, briefing, actionable, itemTitle, itemDetail } from './standup-text';
 
 export async function loadStandup(leftAtMs: number | null): Promise<Standup> {
   try {
-    const [pending, threads] = await Promise.all([api.pending(leftAtMs), api.threads({ archived: 0 })]);
+    const [pending, threads, jobs, snoozed] = await Promise.all([api.pending(leftAtMs), api.threads({ archived: 0 }), api.jobs().catch(() => []),
+                                                                 getMeta('snoozed').then((v) => (v ? JSON.parse(v) : {})).catch(() => ({}))]);
     const runningJobs = pending.jobs.filter((j) => ACTIVE.test(j.state));
     const focus = pickFocus(threads, runningJobs);
     const recent = [...threads].sort((a, b) => ts(b.updated_at) - ts(a.updated_at));
     const shown = focus ? [focus, ...recent.filter((t) => t.id !== focus.id)].slice(0, 3) : recent.slice(0, 3);
-    const byId = new Map(threads.map((t) => [t.id, t]));
-    const items: Waiting[] = [
-      ...pending.approvals.map((a): Waiting => ({ kind: 'approval', id: a.id, title: a.decision_summary?.verb ?? a.summary,
-        detail: byId.get(a.thread_id)?.title ?? 'A thread' })),
-      ...(pending.listening ?? []).map((l): Waiting => ({ kind: 'listen', id: l.id, title: `Listen: ${l.title}`,
-        detail: `${l.n_items} ${l.n_items === 1 ? 'sentence' : 'sentences'}, blind` })),
-      ...pending.threads_needing_you
-        .filter((t) => !pending.approvals.some((a) => a.thread_id === t.id))
-        .map((t): Waiting => ({ kind: 'thread', id: t.id, title: `${t.title} needs you`, detail: 'Open the thread' })),
-    ];
+    const { items, backlog } = attention({ pending, threads, jobs, now: Date.now(), snoozed });
     const activity = focus ? await api.activity(focus.id, leftAtMs).catch(() => null) : null;
-    const s: Standup = { focus, threads: shown, waiting: items[0] ?? null, waitingCount: items.length, runningJobs,
+    const s: Standup = { focus, threads: shown, items, backlog, runningJobs,
                          since: pending.since, activity, asOf: Date.now() };
     setMeta('standup_cache', JSON.stringify(s)).catch(() => undefined);
     return s;
   } catch (e) {
     const cached = await getMeta('standup_cache').catch(() => null);
-    if (cached) return { ...(JSON.parse(cached) as Standup), stale: true };
+    if (cached) {
+      const c = JSON.parse(cached) as Standup; // a cache from before the ranking has no items
+      return { ...c, items: c.items ?? [], backlog: c.backlog ?? { listen: 0 }, stale: true };
+    }
     throw e;
   }
+}
+
+/** "Later": hide one item on this phone for four hours. Decides nothing on Brain. */
+export async function later(key: string): Promise<void> {
+  const cur = await getMeta('snoozed').then((v) => (v ? JSON.parse(v) : {})).catch(() => ({}));
+  await setMeta('snoozed', JSON.stringify(snooze(cur, key, Date.now())));
 }

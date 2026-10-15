@@ -60,7 +60,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
-    "doctor": "expo-doctor"
+    "doctor": "expo-doctor",
+    "test": "tsc -p tsconfig.test.json && node node_modules/.cache/selfcheck/attention.test.js"
   },
   "private": true
 }

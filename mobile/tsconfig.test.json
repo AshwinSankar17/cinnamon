@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": false, "module": "nodenext", "moduleResolution": "nodenext", "outDir": "node_modules/.cache/selfcheck", "rootDir": "src", "types": ["node"] },
+  "include": [],
+  "files": ["src/attention.test.ts"]
+}

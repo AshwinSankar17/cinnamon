@@ -10,17 +10,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Ambient } from '@/components/cinnamon/Ambient';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
-import { at, BAND, frameFor, HERO } from '@/components/cinnamon/frame';
+import { BAND, frameFor, HERO } from '@/components/cinnamon/frame';
 import { SceneBackdrop } from '@/components/cinnamon/SceneBackdrop';
 import { Menu } from '@/components/cinnamon/Menu';
-import { Pet, SAY_AT } from '@/components/cinnamon/Pets';
+import { Briefing } from '@/components/cinnamon/Briefing';
+import { Pet } from '@/components/cinnamon/Pets';
 import { Presenters } from '@/components/cinnamon/Presenters';
 import { Roll, ROLL_BASE, type Mood, type RollHandle } from '@/components/cinnamon/Roll';
 import { Unrolled } from '@/components/cinnamon/Unrolled';
 import { WaitingCard } from '@/components/cinnamon/WaitingCard';
 import { api, describeError } from '@/src/api';
 import { statusOf, useConnection } from '@/src/connection';
-import { headline, loadStandup, petLine, subline, type Standup } from '@/src/standup';
+import { actionable, briefing, headline, later, loadStandup, subline, type Standup } from '@/src/standup';
 import { getMeta } from '@/src/store';
 import { useLive, useWorld, useWorldFont } from '@/src/world';
 import { WORLDS, type WorldId } from '@/src/worlds';
@@ -45,13 +46,13 @@ export default function StandupScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [hist, setHist] = useState(false);
-  const [say, setSay] = useState(false);
+  const [brief, setBrief] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const roll = useRef<RollHandle>(null);
   const wipe = useRef(new Animated.Value(0)).current;
   const [wipeColor, setWipeColor] = useState<string | null>(null);
-  const live = useLive(!menu && !hist);
+  const live = useLive(!menu && !hist && !brief);
 
   const reload = useCallback(async () => {
     try {
@@ -96,17 +97,18 @@ export default function StandupScreen() {
 
   // the free space between the header and the tray, measured once laid out (estimates until then)
   const freeTop = (headerH ?? insets.top + 174) + 6;
-  const freeBottom = (trayTop ?? H - Math.max(insets.bottom, 12) - 58 - (s?.waiting ? 74 : 0)) - 6;
+  const freeBottom = (trayTop ?? H - Math.max(insets.bottom, 12) - 58 - (s?.items.length ? 76 : 62)) - 6;
   const f = frameFor(id, W, H, freeTop, freeBottom);
   const short = Math.min(1, H / 844); // a short browser window shrinks the scene; the headline follows so they never meet
   const asleep = status !== 'live' && status !== 'connecting';
-  const mood: Mood = asleep || s?.stale ? 'asleep' : s?.waiting ? 'needs' : s?.runningJobs.length || s?.focus?.state === 'running' ? 'working' : 'proud';
+  const todo = s ? actionable(s) : [];
+  const top = s?.items[0] ?? null;
+  const mood: Mood = asleep || s?.stale ? 'asleep' : todo.length ? 'needs' : s?.runningJobs.length || s?.focus?.state === 'running' ? 'working' : 'proud';
   const [hx, hy, hs] = HERO[id];
   const rollW = 224 * hs * f.s;
   const rollH = (rollW * 236) / 224;
   const rollPos = { left: f.ox + hx * f.s - rollW * ROLL_BASE.x, top: f.oy + hy * f.s - rollH * ROLL_BASE.y };
   const liveText = status === 'live' && !s?.stale ? (conn.paused ? 'paused' : 'live') : s ? `as of ${Math.max(1, Math.round((Date.now() - s.asOf) / 60000))} min ago` : status;
-  const sayPos = at(f, SAY_AT[id][0], SAY_AT[id][1]);
   const composerTarget = s?.focus ? (showcase ? 'the thread' : s.focus.title) : null;
 
   const send = async () => {
@@ -124,11 +126,8 @@ export default function StandupScreen() {
       setSending(false);
     }
   };
-  const openWaiting = () => {
-    const w = s?.waiting;
-    if (!w) return;
-    router.push(w.kind === 'approval' ? `/approval/${encodeURIComponent(w.id)}` : w.kind === 'listen' ? `/listen/${encodeURIComponent(w.id)}` : `/thread/${encodeURIComponent(w.id)}`);
-  };
+  const open = (href: string) => { setBrief(false); router.push(href as never); };
+  const snooze = async (key: string) => { await later(key).catch(() => undefined); reload(); };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg2, overflow: 'hidden' }}
@@ -150,22 +149,16 @@ export default function StandupScreen() {
           fonts={{ display, mono, hand, ui }} onThread={(tid) => router.push(`/thread/${encodeURIComponent(tid)}`)} />
       ) : null}
       {pet && s ? (
-        <Pet world={id} f={f} live={live} running={s.runningJobs.length} needs={!!s.waiting} label={`${world.pet.name} the ${world.pet.kind}. Tap for a status line.`}
-          onPress={() => { setSay((v) => !v); setTimeout(() => setSay(false), 5000); }} />
+        <Pet world={id} f={f} live={live} running={s.runningJobs.length} needs={!!todo.length}
+          badge={todo.length ? { n: todo.length, color: todo[0].tier <= 2 ? t.needs : t.accent } : null}
+          label={`${world.pet.name} the ${world.pet.kind}, your assistant. ${todo.length ? `${todo.length} ${todo.length === 1 ? 'thing' : 'things'} for you.` : 'Nothing needs you.'} Tap for your list.`}
+          onPress={() => setBrief(true)} />
       ) : null}
       <Pressable accessibilityRole="button" accessibilityLabel={`${showcase ? 'The roll' : s?.focus?.title ?? 'The roll'}: its swirl is the history. Tap to unroll it.`}
         onPress={() => setHist(true)} style={{ position: 'absolute', ...rollPos, width: rollW, height: rollH }}>
         <Roll ref={roll} mood={mood} activity={s?.activity ?? null} accessory={world.accessory} live={live} width={rollW}
           helmetGlass={t.sGlass} helmetRim={t.sRim} helmetCollar={t.sSat} zColor={t.ink2} />
       </Pressable>
-      {say && s ? (
-        <View accessibilityRole="text" style={{ position: 'absolute', left: Math.min(sayPos.left, W - 250), top: sayPos.top, maxWidth: 240, backgroundColor: t.raise,
-                                                 borderRadius: 18, paddingHorizontal: 13, paddingVertical: 10, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 } }}>
-          <Text style={{ fontFamily: ui, fontSize: 13, lineHeight: 18, color: t.ink }}>
-            <Text style={{ fontFamily: uiSemi }}>{world.pet.name}</Text>{` · ${petLine(id, s, showcase)}`}
-          </Text>
-        </View>
-      ) : null}
 
       <View pointerEvents="box-none" onLayout={(e) => setHeaderH(Math.round(e.nativeEvent.layout.height))}
         style={{ position: 'absolute', left: 0, right: 0, top: 0, paddingTop: insets.top + 10, paddingHorizontal: 18 }}>
@@ -188,10 +181,12 @@ export default function StandupScreen() {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} onLayout={(e) => setTrayTop(Math.round(e.nativeEvent.layout.y))} style={{ position: 'absolute', left: 12, right: 12, bottom: Math.max(insets.bottom, 12) }}>
-        {s?.waiting ? (
+        {s ? (
           <View style={{ marginBottom: 10 }}>
-            <WaitingCard world={world} t={t} waiting={s.waiting} more={Math.max(0, s.waitingCount - 1)} live={live} fonts={{ display, mono, ui }}
-              onPress={s.waitingCount > 1 ? () => router.push('/inbox') : openWaiting} />
+            <WaitingCard world={world} t={t} item={top} more={Math.max(0, todo.length - (top && top.tier <= 4 ? 1 : 0))} live={live} showcase={showcase}
+              petName={pet ? world.pet.name : null} fonts={{ display, mono, ui }}
+              calm={{ title: `${pet ? `${world.pet.name} · ` : ''}${briefing(id, s, showcase).intro}`, detail: briefing(id, s, showcase).status }}
+              onPress={top && (pet || !s.items[1]) ? () => open(top.href) : () => setBrief(true)} onLater={() => top && snooze(top.key)} />
           </View>
         ) : null}
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', height: 58 }}>
@@ -219,6 +214,10 @@ export default function StandupScreen() {
                    transform: [{ scale: wipe.interpolate({ inputRange: [0, 1, 2], outputRange: [0.001, 1, 1] }) }] }} />
       ) : null}
       <Unrolled open={hist} onClose={() => setHist(false)} activity={s?.activity ?? null} title={s?.focus?.title ?? 'This thread'} width={W} />
+      {brief && s ? (
+        <Briefing world={world} t={t} s={s} showcase={showcase} bottom={H - (trayTop ?? H - 70) + 10} maxHeight={H * 0.62}
+          fonts={{ display, mono, ui, uiSemi }} onClose={() => setBrief(false)} onOpen={open} onLater={snooze} />
+      ) : null}
       <Menu open={menu} onClose={() => setMenu(false)} onPickWorld={pickWorld} />
     </View>
   );
