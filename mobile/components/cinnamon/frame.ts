@@ -2,7 +2,7 @@
  *  the bottom tray; each world's content (its threads, the roll, the companion) must sit inside it, whatever the phone.
  *  So the scene is scaled to fit that content into the free space, never larger than covering the screen, and placed
  *  so the backdrop leaves as little uncovered as possible. What it cannot cover (a short or wide screen) is filled by
- *  continuing the backdrop's own edges (SceneBackdrop). */
+ *  continuing the backdrop as its own mirror image (SceneBackdrop). */
 import type { WorldId } from '@/src/worlds';
 
 export type Frame = { s: number; ox: number; oy: number; w: number; h: number };
@@ -17,15 +17,6 @@ export const BAND: Record<WorldId, { top: number; bottom: number; left: number; 
   tide: { top: 246, bottom: 628, left: 10, right: 380, calm: 240 },
 };
 // calm: down to which design y the backdrop is plain enough (wall, sky, water) for the header to sit on.
-
-/** Which design column (x) each world's left and right margins continue: a clean edge, free of props that would smear. */
-export const EDGE: Record<WorldId, [number, number]> = {
-  bakery: [11, 379],
-  forest: [11, 11],
-  rustic: [11, 11],
-  space: [389.5, 389.5],
-  tide: [389.5, 389.5],
-};
 
 /** `top`/`bottom`: the free space between the header and the tray, in screen pixels. */
 export function frameFor(world: WorldId, w: number, h: number, top: number, bottom: number): Frame {
