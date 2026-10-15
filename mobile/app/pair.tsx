@@ -63,7 +63,7 @@ export default function PairScreen() {
         await forgetPairing();
         await wipeLocal();
       }
-      const name = Device.deviceName ?? Device.modelName ?? (Platform.OS === 'web' ? webDeviceName(navigator.userAgent) : 'phone');
+      const name = Device.deviceName ?? Device.modelName ?? (Platform.OS === 'web' ? webDeviceName(navigator.userAgent, navigator.maxTouchPoints) : 'phone');
       const r = await completePairing(payload, name);
       const h = await health();
       setTest({

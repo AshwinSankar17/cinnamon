@@ -58,9 +58,11 @@ export function word(n: number): string {
   return n >= 0 && n < WORDS.length ? WORDS[n] : String(n);
 }
 
-/** "Chrome · Android" from a user agent, for the pairing name on the web (Device.deviceName is null there). */
-export function webDeviceName(ua: string): string {
-  const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
-  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'web';
+/** "Chrome · Android" from a user agent, for the pairing name on the web (Device.deviceName is null there).
+ *  iPadOS Safari reports a Mac user agent; touchPoints (navigator.maxTouchPoints) tells them apart. */
+export function webDeviceName(ua: string, touchPoints = 0): string {
+  const browser = /Edg(A|iOS)?\//.test(ua) ? 'Edge' : /Firefox\/|FxiOS\//.test(ua) ? 'Firefox' : /Chrome\/|CriOS\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows'
+    : /Mac OS X/.test(ua) ? (touchPoints > 1 ? 'iPadOS' : 'macOS') : /Linux/.test(ua) ? 'Linux' : 'web';
   return `${browser} · ${os}`;
 }
