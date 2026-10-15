@@ -137,6 +137,7 @@ export function Menu({ open, onClose, onPickWorld }: { open: boolean; onClose: (
                   right={<Switch on={!!rules?.quiet_hours.enabled} label="Quiet hours"
                     onChange={(v) => api.setQuietHours(v).then((q) => setRules((r) => (r ? { ...r, quiet_hours: q } : r))).catch((e) => setErr(describeError(e)))} />} />
                 <Row title="Connection" detail={`${status === 'live' ? 'live' : status}${ep && !showcase ? ` · ${clusterLabel(ep)}` : ''}`} />
+                <Row title="Inbox" detail="everything waiting for you, and the pause switch" onPress={() => { onClose(); router.push('/inbox'); }} />
                 <Row title="Threads" detail="every thread, by repo" onPress={() => { onClose(); router.push('/threads'); }} />
                 <Row title="Jobs" detail="SLURM jobs and their logs" onPress={() => { onClose(); router.push('/runs'); }} />
                 <Row title="Import sessions" detail="your terminal Claude and Codex sessions" onPress={() => { onClose(); router.push('/import'); }} />

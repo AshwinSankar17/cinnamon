@@ -25,7 +25,7 @@ import { WorldProvider } from '@/src/world';
 
 export { ErrorBoundary } from 'expo-router';
 
-export const unstable_settings = { initialRouteName: '(tabs)' };
+export const unstable_settings = { initialRouteName: 'index' };
 
 SplashScreen.preventAutoHideAsync();
 
@@ -94,7 +94,11 @@ export default function RootLayout() {
       <View style={{ flex: 1, backgroundColor: colors.ground }}>
       <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center', borderLeftWidth: wide ? 1 : 0, borderRightWidth: wide ? 1 : 0, borderColor: colors.hairline }}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" />
+        <Stack.Screen name="inbox" />
+        <Stack.Screen name="threads" />
+        <Stack.Screen name="runs" />
+        <Stack.Screen name="import" />
         <Stack.Screen name="pair" />
         <Stack.Screen name="thread/[id]" options={{ contentStyle: { backgroundColor: colors.surface } }} />
         <Stack.Screen name="approval/[id]" />

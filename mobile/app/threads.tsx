@@ -5,7 +5,7 @@ import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { Icon } from '@/components/Icon';
 import { plainText } from '@/components/Markdown';
 import { ThreadActionsSheet } from '@/components/ThreadActionsSheet';
-import { Chip, Dot, EmptyNote, IconButton, ListCard, Mono, ProviderPill, SectionLabel, TabHeader } from '@/components/ui';
+import { Chip, Dot, EmptyNote, IconButton, ListCard, Mono, ProviderPill, SectionLabel, BackHeader } from '@/components/ui';
 import { api } from '@/src/api';
 import { ago } from '@/src/format';
 import { useRemote } from '@/src/hooks';
@@ -104,8 +104,9 @@ export default function ThreadsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>
-      <TabHeader
+      <BackHeader
         title="Threads"
+        surface={colors.ground}
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <IconButton name="refresh" label="Import terminal sessions" bordered onPress={() => router.push('/import')} />
