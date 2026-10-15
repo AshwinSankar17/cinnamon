@@ -205,3 +205,110 @@ def test_api_lists_and_imports(owner, brain):
         assert c.post("/v1/imports", json={"provider": "claude", "session_id": "nope"}).status_code == 404
         r = c.post("/internal/imports", json={"configure": {"days": 7}}, headers={"X-Brain-Admin-Token": brain.admin_token})
         assert r.status_code == 200 and brain.settings.raw["import"]["days"] == 7
+
+
+# ---- final-review fixes ---------------------------------------------------------------------------
+def test_switching_provider_after_import_keeps_the_budget(owner, brain):
+    from brain.providers.fake import FakeProvider
+    brain.providers["fake2"] = FakeProvider("fake2")
+    _long_session(owner, "r1", 400)
+    t = importer.import_session(brain, "claude", "r1", provider_override="fake")
+    rows = {r["provider"]: r["canon_synced"] for r in brain.db.q("SELECT * FROM provider_sessions WHERE thread_id=?", (t["id"],))}
+    assert rows["fake2"] == rows["fake"] > 0
+
+
+def test_concurrent_imports_make_one_thread(owner, brain):
+    from concurrent.futures import ThreadPoolExecutor
+    _claude_session(owner["profile"], owner["repo"], "r2")
+    with ThreadPoolExecutor(4) as ex:
+        ids = {f.result()["id"] for f in [ex.submit(importer.import_session, brain, "claude", "r2", "fake") for _ in range(4)]}
+    assert len(ids) == 1
+    assert brain.db.one("SELECT COUNT(*) AS n FROM threads WHERE imported_from='claude:r2'")["n"] == 1
+
+
+def test_settings_are_saved_atomically(brain, monkeypatch):
+    import os as _os
+    replaced = []
+    real = _os.replace
+    monkeypatch.setattr(_os, "replace", lambda a, b: (replaced.append(str(b)), real(a, b)))
+    brain.settings.save(brain.p)
+    assert replaced == [str(brain.p.settings)]
+
+
+def test_a_half_finished_import_is_not_returned_as_done(owner, brain, monkeypatch):
+    _claude_session(owner["profile"], owner["repo"], "r3")
+    monkeypatch.setattr(importer, "_events", lambda *a: (_ for _ in ()).throw(RuntimeError("disk full")))
+    with pytest.raises(RuntimeError):
+        importer.import_session(brain, "claude", "r3", provider_override="fake")
+    monkeypatch.undo()
+    t = importer.import_session(brain, "claude", "r3", provider_override="fake")
+    assert brain.db.one("SELECT 1 FROM provider_sessions WHERE thread_id=?", (t["id"],))
+
+
+def test_automated_runs_are_never_listed(owner, brain, tmp_path):
+    sdk = [{"type": "user", "cwd": str(owner["repo"]), "sessionId": "r4", "entrypoint": "sdk-cli",
+            "message": {"role": "user", "content": "automated"}}]
+    _claude_session(owner["profile"], owner["repo"], "r4", records=sdk)
+    home = tmp_path / "codexhome"
+    brain.settings.raw["import"]["codex_dirs"] = [str(home)]
+    _codex_session(home, owner["repo"], "c-plugin", originator="Claude Code")
+    assert importer.discover(brain.settings) == []
+
+
+def test_titles_are_redacted_before_they_are_cut(owner, brain):
+    msg = "x" * 50 + SECRET + " please"
+    recs = [{"type": "user", "cwd": str(owner["repo"]), "sessionId": "r5", "message": {"role": "user", "content": msg}}]
+    _claude_session(owner["profile"], owner["repo"], "r5", records=recs)
+    (c,) = importer.candidates(brain)
+    assert SECRET[:8] not in c["title"] and len(c["title"]) <= 60
+    t = importer.import_session(brain, "claude", "r5", provider_override="fake")
+    assert SECRET[:8] not in t["title"]
+
+
+def test_the_profiles_own_credentials_are_redacted(owner, brain):
+    token = "sk-ant-oat01-PROFILE-TOKEN-1234567890"
+    owner["profile"].mkdir(parents=True, exist_ok=True)
+    (owner["profile"] / ".credentials.json").write_text(json.dumps({"claudeAiOauth": {"accessToken": token}}))
+    recs = [{"type": "user", "cwd": str(owner["repo"]), "sessionId": "r6", "message": {"role": "user", "content": "hi"}},
+            {"type": "assistant", "cwd": str(owner["repo"]), "sessionId": "r6",
+             "message": {"role": "assistant", "content": [{"type": "text", "text": f"token is {token}"}]}}]
+    _claude_session(owner["profile"], owner["repo"], "r6", records=recs)
+    t = importer.import_session(brain, "claude", "r6", provider_override="fake")
+    assert token not in json.dumps(brain.transcript(t["id"])) + json.dumps(brain.events.replay(t["id"], 0, 100))
+
+
+def test_imported_history_is_grouped_into_turns(owner, brain):
+    recs = [
+        {"type": "user", "cwd": str(owner["repo"]), "sessionId": "r7", "message": {"role": "user", "content": "ls please"}},
+        {"type": "assistant", "cwd": str(owner["repo"]), "sessionId": "r7", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "toolu_9", "name": "Bash", "input": {"command": "ls"}}]}},
+        {"type": "user", "cwd": str(owner["repo"]), "sessionId": "r7", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "toolu_9", "content": "a b"}]}},
+        {"type": "assistant", "cwd": str(owner["repo"]), "sessionId": "r7",
+         "message": {"role": "assistant", "content": [{"type": "text", "text": "Two files."}]}},
+        {"type": "user", "cwd": str(owner["repo"]), "sessionId": "r7", "message": {"role": "user", "content": "thanks"}},
+    ]
+    _claude_session(owner["profile"], owner["repo"], "r7", records=recs)
+    t = importer.import_session(brain, "claude", "r7", provider_override="fake")
+    evs = [e for e in brain.events.replay(t["id"], 0, 200) if e["type"] not in ("system.notice",)]
+    started = [e["payload"]["turn_id"] for e in evs if e["type"] == "turn.started"]
+    assert len(started) == 2 and len([e for e in evs if e["type"] == "turn.ended"]) == 2
+    work = [e for e in evs if e["type"] in ("assistant.text", "tool.started", "tool.completed")]
+    assert all(e["turn_id"] == started[0] for e in work)
+
+
+def test_auto_registered_repos_use_the_branch_that_exists(owner, brain, tmp_path):
+    other = tmp_path / "y" / "trunkrepo"
+    other.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", "-b", "trunk", str(other)], check=True)
+    subprocess.run(["git", "-C", str(other), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"], check=True)
+    _claude_session(owner["profile"], other, "r8")
+    t = importer.import_session(brain, "claude", "r8", provider_override="fake")
+    assert brain.settings.repo(t["repo_id"]).default_branch == "trunk"
+
+
+def test_one_unreadable_file_does_not_break_the_listing(owner, brain):
+    _claude_session(owner["profile"], owner["repo"], "r9")
+    (owner["profile"] / "projects" / "x").mkdir(parents=True, exist_ok=True)
+    (owner["profile"] / "projects" / "x" / "dangling.jsonl").symlink_to(owner["root"] / "nowhere.jsonl")
+    assert [c["session_id"] for c in importer.discover(brain.settings)] == ["r9"]

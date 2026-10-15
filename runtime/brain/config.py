@@ -5,6 +5,7 @@ Everything lives under BRAIN_ROOT (default ~/.brain), created 0700 with umask 07
 from __future__ import annotations
 
 import os
+import threading
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -194,8 +195,11 @@ class Settings:
             fcm_project_id=self.fcm_project_id,
             endpoint=self.endpoint,
         )
-        p.settings.write_text(yaml.safe_dump(data, sort_keys=False))
-        os.chmod(p.settings, 0o600)
+        # write-then-rename: two saves racing (threadpool endpoints) must never leave a torn settings.yaml behind
+        tmp = p.settings.with_name(f".{p.settings.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        tmp.write_text(yaml.safe_dump(data, sort_keys=False))
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, p.settings)
 
     def repo(self, repo_id: str) -> RepoConfig | None:
         return next((r for r in self.repos if r.id == repo_id), None)
