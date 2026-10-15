@@ -9,7 +9,7 @@ Prerequisite: Part 2 of `2026-10-08-codex-app-server-and-durable-state-design.md
 Make Brain's structure match how the owner works, and give the phone app a reason to be opened.
 
 1. **Structure.** A project is a repo plus a vault. One long-lived *repo session* is the only agent that edits source. *Threads* are long-lived workstreams of actions (train, evaluate, listen) that run on a *frozen code version* and keep every artifact in their own vault folder. When a thread needs a code change it files a *change request* with the repo session; a thread never switches into a code session.
-2. **App.** Rebrand the UI as Cinnamon. The home is a standup: what each thread is doing, its latest verified finding, and what needs the owner. Every project is drawn as one object, unrolled by day and rolled into a spiral by night. A menu in the bottom tray holds the world switcher, provider quota, rules, quiet hours, connection and sign-out. The visual identity is a set of switchable *worlds* (Cinnamon, Forest, Rustic, Space, Tide), each changing material, type, ambient motion and feel.
+2. **App.** Rebrand the UI as Cinnamon. The main character is a cinnamon roll whose swirl is the project's history and whose face is its state. The home is a standup: what each thread is doing, its latest verified finding, and what needs the owner. Switchable *worlds* (Bakery, Forest, Rustic, Space, Tide) put the roll in a different place, each with its own way of presenting threads, its own waiting card, a themed companion, its own type and motion. A menu in the bottom tray holds the world switcher, the companion switch, provider quota, rules, quiet hours, connection and sign-out.
 3. **Quality of life.** Fix what the audit found: missing pushes, a broken "since you left", auto-archive of live work, unreadable job names, and more (§9).
 
 Success, checked after two weeks of real use on EDIT TTS:
@@ -31,7 +31,9 @@ Success, checked after two weeks of real use on EDIT TTS:
 | Relay | Named Cloudflare tunnel (stable URL). |
 | Platforms | Native parity: motion must work in the PWA and the native build (Reanimated + react-native-svg; no web-only tricks in the shipped path). |
 | Look | Free-rein rebrand as Cinnamon. This supersedes the binding palette in `mobile/PRODUCT.md`, which must be updated. |
-| Themes | Full worlds, not colour packs: Forest, Rustic, Space and more. Each has a day and a night. |
+| Main character | A cinnamon roll, the same in every world. Its swirl is the project's history and its face is the project's state. |
+| Themes | Worlds are places and experiences, not colour packs: Bakery, Forest, Rustic, Space, Tide. Each has a day and a night, its own scene, its own way of showing threads and waiting items, and its own type and motion. |
+| Companions | One themed pet per world (sparrow, squirrel, cat, eight-armed alien, fish), switched on or off from the menu. |
 | Menu | A hamburger in the bottom tray: sign out, world switching, provider quota, rules, and more. |
 | Showcase | A switch that hides names and numbers so the owner can show the app off. |
 
@@ -133,39 +135,84 @@ Naming stays as it is internally: `brain`, `BRAIN_*`, `~/.brain`, hook names, `r
 
 ### 7.1 Screens
 
-1. **Standup (home).** One sentence per project ("The refinement study is evaluating both of its arms.") and "since you left" counts from `/v1/pending?since`. Below it, the project object (§7.2) with finding medallions and the live tip. The thing that needs you sits at thumb height. Composer and menu live in the bottom tray.
+1. **Standup (home).** One sentence per project ("The refinement study is evaluating both of its arms.") and "since you left" counts from `/v1/pending?since`. Below it is the world's scene: the roll (§7.2), the project's threads presented the world's way, and the companion. The thing that needs you sits at thumb height as the world's waiting card. Composer and menu live in the bottom tray.
 2. **Project.** Repo session card: idle/working, a strand of code versions (tap a bead to read its changelog), change requests and their trail. Then threads, each with its code version, state chip, one-line now, and verified metrics. The composer addresses the repo session.
 3. **Thread.** As today (chat, steps, job cards, approvals, listening), plus a header with code version, folder path and Files button. Job cards gain Log (tail), run dir, and attempt count.
 4. **Trays:** approval, listening test, change request, finding peek. They open over the current screen. Dismissing a tray never decides anything.
 
-### 7.2 The object and the worlds
+### 7.2 The roll, its worlds and its companions
 
-- **The object.** A project's history drawn as one shape. Width is smoothed activity per time bin (turns and jobs). Flecks mark failed jobs. The stretch since you left is in the fresh tone and traces itself in on open. Findings are glyphs, now is a glowing tip, and day labels are shown by day only. By day it is unrolled; by night the same 150 points morph into the world's spiral (1–1.3 s, world easing).
-- **A world is data:** day and night tokens, three typefaces, a spiral recipe (Archimedean, flattened galaxy or logarithmic), a decoration recipe (fibre, grain rings, rope hatch, star dust, nautilus septa), one ambient recipe, a finding glyph, a motion curve and a haptic. New worlds need no new screens.
+**The main character is a cinnamon roll.** It is the same roll in every world, and it is the project.
 
-| World | Day → night | Type (display · UI · mono) | Ambient | Roll |
-|---|---|---|---|---|
-| Cinnamon (default) | bark ribbon → quill | Instrument Serif · Geist · Geist Mono | warm glow, 9 s breath | 1.05 s in-out |
-| Forest | branch with leaves → tree rings | Fraunces · Hanken Grotesk · IBM Plex Mono | pollen / fireflies | 1.3 s |
-| Rustic | laid rope → coiled mat, wood grain | Young Serif · Libre Franklin · Courier Prime | hearth flicker | 1.1 s, small overshoot |
-| Space | comet trail → spiral galaxy | Unbounded · Sora · Martian Mono | starfield, 1 in 5 twinkle | 0.95 s sharp |
-| Tide | current → nautilus | Newsreader · Figtree · DM Mono | marine snow | 1.2 s sine |
+- **Its swirl is the history.** The swirl on top is the project timeline rolled up: 150 time bins from the centre (oldest) to the tail (now).
+  - **Width** is smoothed activity per bin (turns and jobs).
+  - **The stretch since you left** is drawn in a brighter cinnamon and traces itself in when you open the app.
+  - **Sugar crystals** mark verified findings.
+  - **A glowing tip** marks now.
+- **Tap the roll** and it unrolls into the full timeline. The timeline is drawn from the same 150 points, with day labels, failed-job flecks, finding labels and the now tip.
+- **Its face is the project's state.** Moods come only from Brain state; the agent never sets them.
 
-- **Switching** grows the new world's background out of the menu tray as a circle (600 ms). Then tokens cross-fade and the object morphs into its new material. Light/dark has three choices: Day, Night, and Match phone (follows the system setting).
+  | Mood | Shown when |
+  |---|---|
+  | Needs you | Something waits on the owner (approval, listening test). Eyebrows up, eyes on the card at thumb height. |
+  | Working | Jobs or a turn are running and nothing waits. Steam rises while they run. |
+  | Proud | A verified finding arrived since the owner last looked. It shows once, then falls back to working or idle. |
+  | Asleep | Brain or the tunnel is unreachable. All motion stops and values read "as of N min ago". |
+
+**A world is a place with an experience, not a palette.** It decides:
+- where the roll lives;
+- what the threads become;
+- how the thing waiting for you arrives;
+- who keeps the roll company;
+- the type and how everything moves.
+
+What never changes across worlds: the headline sentence, the waiting card at thumb height, the composer and menu, the order of information, and every number.
+
+| World | The roll | Threads appear as | Waiting for you | Companion (role) | Type (display · UI · mono) | Ambient |
+|---|---|---|---|---|---|---|
+| Bakery (default) | cools on a rack, iced; steams while jobs run | order tickets clipped to a rail | the ticket that says Order up | **Crumb** the sparrow: hops to the ticket when an order is up | Fraunces (SOFT) · Instrument Sans · DM Mono | flour motes in window light |
+| Forest | on a stump under a great oak, leaf hat | wooden tags swinging from a branch | a note hung on twine | **Hazel** the squirrel: one acorn per finding | Young Serif · Hanken Grotesk · IBM Plex Mono | pollen by day, fireflies by night |
+| Rustic | on a plate on a checked cloth, by the hearth | recipe cards pinned to a cork board, handwritten (Caveat) | a note with a red pin | **Nutmeg** the cat: sleeps by the fire; ears up and one eye open when needed | Alegreya · Alegreya Sans · Courier Prime | firelight flicker, snow outside |
+| Space | floats in a helmet | satellites on the roll's orbit | an incoming transmission | **Anise**, eight-armed alien: one lit arm per running job, up to 8 | Unbounded · Sora · Martian Mono | stars twinkle, satellites drift, galaxy by night |
+| Tide | rests in an open clam | bubbles, newest floating highest | a bottle washed up | **Saffron** the fish: swims laps, heads for what needs you | Fredoka · Figtree · DM Mono | kelp sway, rising bubbles, marine snow by night |
+
+- **Day and night** are part of each world, not a recolour: sun or moon, lit windows, fireflies, the galaxy, the colour of the deep sea. Choices are Day, Night, and Match phone (follows the system setting).
+- **Companions** are on by default and switch off in the menu. They only ever restate verified state:
+  - Hazel's acorns are the finding count.
+  - Anise's lit arms are running jobs.
+  - Tapping a companion shows a one-line status built from the same verified numbers as the headline.
+
+  A companion never decides anything, never blocks a control, and is hidden in reduced-motion mode if it would move.
+- **Switching worlds** happens in this order:
+  1. The new world's backdrop grows out of the menu tray as a circle (600 ms).
+  2. The scene settles in (700 ms out-expo).
+  3. The roll drops into its new home with a squash and settle (950 ms).
+  4. The companion fades in 500 ms later.
+- **A world is data plus one scene component:**
+  - Data: tokens for day and night, three typefaces, a hero placement (position, scale, accessory: icing, leaf hat, helmet, clam), a thread presenter (ticket, tag, card, satellite, bubble), a waiting-card shape, a companion, an ambient recipe and a haptic.
+  - Scene component: one react-native-svg component, ≤ 120 shapes.
+
+  Adding a world means one scene file and one data entry; no screen changes.
 - **Motion rules:**
-  - At most one ambient loop per screen, plus the live tip.
-  - Everything that loops stops when Brain or the tunnel is unreachable (values then read "as of N min ago"), when the app is backgrounded, and under reduced motion.
-  - Tokens: tap 100 ms at scale .97; trays 500 ms `cubic-bezier(.32,.72,0,1)` with drag-to-dismiss and velocity; reveal 420 ms out-expo.
-- **Native parity.** The mockup morphs with CSS `d:` transitions, which only Chrome supports. The app interpolates the point arrays in a Reanimated derived value and feeds `animatedProps` on a react-native-svg `Path`, so web and native behave the same. The wipe is a scaled circle `View`, not `clip-path`. Particles are ≤ 46 `View`s with transform/opacity only. Grain is a static PNG tile, because there's no `feTurbulence` in react-native-svg.
-- **Fonts** are self-hosted. Only the active world's three faces load at start. The World step lazy-loads the other display faces when it opens.
-- **Showcase** swaps names, experiment labels and numbers for generic copy. It changes nothing else.
-- **Haptics:** `expo-haptics` on native and `navigator.vibrate` (≤ 20 ms) on Android web, only for world switch, approval signed, and reveal. No sound.
+  - At most three loops per screen: one scene ambient, one companion idle, and the live tip.
+  - All loops share one clock and stop when Brain or the tunnel is unreachable, when the app is backgrounded, when a sheet covers the scene, and under reduced motion.
+  - Tokens: tap 100 ms at scale .97; trays 500 ms `cubic-bezier(.32,.72,0,1)` with drag-to-dismiss and velocity; step slides 420 ms; reveal 420 ms out-expo.
+- **Native parity.**
+  - Scenes, the roll and companions are react-native-svg; patterns and gradients are supported there.
+  - Loops animate transform and opacity only, through Reanimated on `G` wrappers, never per-path `animatedProps` at scale.
+  - The world wipe is a scaling circle `View`, not `clip-path`.
+  - The unroll morph interpolates the 150 points in a Reanimated derived value.
+  - No SVG filters.
+- **Fonts** are self-hosted. Only the active world's faces load at start. The World step shows each world's name in its own face, loading display faces lazily.
+- **Showcase** swaps project names, thread names and numbers for generic copy. Companions say generic lines. Nothing else changes.
+- **Haptics:** `expo-haptics` on native and `navigator.vibrate` (≤ 20 ms) on Android web, only for world switch, roll landing, approval signed, and reveal. No sound.
 
 ### 7.3 Menu (bottom tray)
 
 A hamburger to the left of the composer morphs into ✕. The menu is one sheet whose height changes per step, with steps sliding in the direction of travel.
 
-- **World:** carousel of world cards (each draws its own object in its own palette), Day / Night / Match phone, Showcase.
+- **World:** carousel of world cards (a miniature of each place with the roll in it), Day / Night / Match phone, Showcase.
+- **Companion** (switch, row): the current world's companion by name ("Hazel the squirrel"). Stored per device.
 - **Quota:** one block per provider, each with gauges for 5-hour and weekly windows, reset times, credits, and the snapshot age. Sources, all verified on this machine on 2026-10-15 with no model turn:
 
   | Provider | Source | Fields |
@@ -233,12 +280,12 @@ Each phase ships on its own, is tested on a throwaway Brain (never the owner's p
 - **P1: structure.** Repo sessions, code versions, change requests, work threads on read-only checkouts, the vault layout, job provenance, the migration (§3.5), listening dismiss, job progress and logs. *Kill:* §3.4 read-only fallback. If agents keep routing around change requests (e.g. copying code into the thread folder) on more than 2 occasions in a week, add a policy check that flags `.py` files written into thread folders.
 - **P2: truth layer.** `brain status`/`finding`, `results.json`, the progress tail, the failure classifier, `GET /v1/standup` + WebSocket. *Kill:* §6 staleness rule.
 - **P3: Cinnamon shell.**
-  - Tokens and the world engine with Cinnamon and Forest first.
+  - The roll, the world engine, Bakery and Forest scenes with their companions first.
   - Standup, project screen, trays, and the menu (World, Quota, Rules, Quiet hours, Connection, This phone).
   - `<Live>` gating, CSP, self-hosted fonts.
   - *Budget:* LCP ≤ 2.5 s, INP ≤ 200 ms, JS ≤ 550 KB gzip, warm open to a cached standup ≤ 1.0 s, 60 fps morph on the owner's phone.
   - *Kill:* if the morph drops frames on the owner's phone, cross-fade between day and night shapes instead. If push-to-decision gets slower, ship the trays without motion.
-- **P4: the rest.** Rustic, Space and Tide; search; usage; projects row; history paging; rename/edit-resend; cleanup actions.
+- **P4: the rest.** Rustic, Space and Tide with their companions; search; usage; projects row; history paging; rename/edit-resend; cleanup actions.
 
 ## 11. Testing
 
@@ -251,7 +298,8 @@ Each phase ships on its own, is tested on a throwaway Brain (never the owner's p
   - Golden standup with a frozen clock.
   - Provenance test: every number maps to a column, a `results.json` key, or a quota snapshot.
 - **App:**
-  - Playwright screenshots of each world × day/night × menu step against an Expo web build, compared as visual goldens. The mockups were checked the same way.
+  - Playwright screenshots of each world × day/night × mood × companion on/off, and each menu step, against an Expo web build, compared as visual goldens. The mockups were checked the same way.
+  - A provenance test for companions: every statement a companion makes maps to the same verified field as the headline.
   - Reduced-motion and offline (`document.getAnimations().length === 0`) tests.
   - A real-phone trace of standup → project → tray → back.
 
@@ -264,6 +312,7 @@ Each phase ships on its own, is tested on a throwaway Brain (never the owner's p
 ## 13. Not doing (YAGNI)
 
 - User-made or shared worlds: worlds are code-defined until someone asks to share one.
+- Companions that act on anything, wander across controls, or are animated beyond one idle loop.
 - Sound.
 - Location-based day/night.
 - Moving existing vault folders.
