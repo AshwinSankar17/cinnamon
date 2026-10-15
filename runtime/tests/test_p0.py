@@ -69,3 +69,33 @@ def test_expiry_spares_pending_listening_tests_and_recent_jobs(brain):
     for x in (listen, job, plain):
         brain.db.x("UPDATE threads SET updated_at=? WHERE id=?", (old, x["id"]))
     assert brain.expire_threads() == [plain["id"]]
+
+
+def _st(hh, mm):
+    return time.struct_time((2026, 10, 15, hh, mm, 0, 3, 288, -1))
+
+
+def test_quiet_window_wraps_midnight(brain):
+    brain.settings.quiet_hours = ("23:00", "07:00")
+    brain.settings.raw["quiet_hours_enabled"] = True
+    assert brain._quiet_now(_st(3, 40)) and brain._quiet_now(_st(23, 0))
+    assert not brain._quiet_now(_st(7, 0)) and not brain._quiet_now(_st(22, 59))
+    brain.settings.raw["quiet_hours_enabled"] = False
+    assert not brain._quiet_now(_st(3, 40))
+
+
+def test_quiet_hours_hold_everything_but_approvals_then_send_one_digest(brain, monkeypatch):
+    sent = []
+    monkeypatch.setattr(brain, "_push_all", lambda kind, title, body, data: sent.append((kind, title)))
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    muted = brain.create_thread("hi-tts-v3", "muted", "worktree")
+    brain.patch_thread(muted["id"], muted=True)
+    monkeypatch.setattr(brain, "_quiet_now", lambda at=None: True)
+    brain._notify(t["id"], "needs_you", "Ready to listen: V3 vs V1", "5 items", {"thread_id": t["id"]})
+    brain._notify(t["id"], "approval", "Push to main", "git push", {"thread_id": t["id"]})
+    brain._notify(muted["id"], "done", "muted thing", "x", {"thread_id": muted["id"]})
+    assert sent == [("approval", "Push to main")]
+    monkeypatch.setattr(brain, "_quiet_now", lambda at=None: False)
+    assert brain._flush_digest() == 1
+    assert sent[-1][0] == "digest" and "1 update" in sent[-1][1]
+    assert brain._flush_digest() == 0  # sent once

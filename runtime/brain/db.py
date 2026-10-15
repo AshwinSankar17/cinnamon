@@ -198,6 +198,14 @@ CREATE TABLE IF NOT EXISTS ledger (
   value REAL NOT NULL DEFAULT 0,
   PRIMARY KEY (day, scope, metric)
 );
+
+CREATE TABLE IF NOT EXISTS digest (
+  ts REAL NOT NULL,
+  thread_id TEXT,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL
+);
 """
 
 

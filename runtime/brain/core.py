@@ -926,6 +926,7 @@ class Brain:
     async def tick(self, force: bool = False) -> None:
         """One scheduler pass: job states, wait conditions, wakes, idle-thread expiry."""
         self.expire_threads()
+        self._flush_digest()
         jobs = [dict(r) for r in self.db.q("SELECT * FROM jobs WHERE state NOT IN (%s)" %
                                            ",".join("?" * len(slurm.TERMINAL)), list(slurm.TERMINAL))]
         updates = await asyncio.to_thread(self.watcher.poll, jobs, force)
@@ -996,11 +997,39 @@ class Brain:
         t = self.thread(thread_id)
         if t and t["muted"] and kind not in ("approval", "needs_you"):
             return
+        if kind != "approval" and self._quiet_now():  # approvals always ring; the rest waits for the morning
+            self.db.x("INSERT INTO digest(ts, thread_id, kind, title, body) VALUES (?,?,?,?,?)",
+                      (now(), thread_id, kind, title, body))
+            return
+        self._push_all(kind, title, body, data)
+
+    def _push_all(self, kind: str, title: str, body: str, data: dict) -> None:
         for d in self.db.q("SELECT * FROM devices WHERE revoked=0"):
             if d["fcm_token"] or not d["web_push"]:  # native app (or the dry-run outbox when nothing is registered)
                 self.push.send(d["fcm_token"], kind, title, body, data)
             if d["web_push"]:  # PWA
                 self._send_web(d["id"], json.loads(d["web_push"]), kind, title, body, data)
+
+    def _quiet_now(self, at: time.struct_time | None = None) -> bool:
+        if not self.settings.raw.get("quiet_hours_enabled", True) or len(self.settings.quiet_hours) != 2:
+            return False
+        lt = at or time.localtime()
+        cur = lt.tm_hour * 60 + lt.tm_min
+        start, end = ((int(h) * 60 + int(m)) for h, m in (x.split(":") for x in self.settings.quiet_hours))
+        return start <= cur < end if start < end else (cur >= start or cur < end)
+
+    def _flush_digest(self) -> int:
+        """After quiet hours: one push summarising what was held. Returns how many items it covered."""
+        if self._quiet_now():
+            return 0
+        rows = self.db.q("SELECT title FROM digest ORDER BY ts")
+        if not rows:
+            return 0
+        n = len(rows)
+        self._push_all("digest", f"While you were away: {n} update{'s' if n != 1 else ''}",
+                       " · ".join(r["title"] for r in rows[:3])[:240], {})
+        self.db.x("DELETE FROM digest")
+        return n
 
     def _send_web(self, device_id: str, sub: dict, kind: str, title: str, body: str, data: dict) -> None:
         msg = {"title": title[:120], "body": body[:240], "data": {"v": "1", "kind": kind, **data}}
