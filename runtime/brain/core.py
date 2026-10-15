@@ -634,10 +634,18 @@ class Brain:
         self._ledger("turns", 1, thread_id)
         self._ledger("output_tokens", res.usage.get("output_tokens", 0), thread_id)
         self._set_state(thread_id, self._resting_state(thread_id))
-        done_after = float(self.settings.raw.get("notify_done_after_s", 600))  # quiet by default: long turns only
-        if dur > done_after * 1000 and not res.error and self._resting_state(thread_id) == "idle":
-            self._notify(thread_id, "done", f"{t['title']}: turn finished",
-                         (res.text or "Done.")[:200], {"thread_id": thread_id})
+        first_line = next((ln.strip() for ln in (res.text or "").splitlines() if ln.strip()), "Done.")[:200]
+        if res.stop_reason == "error":  # the owner hears about failures, including a provider that will not start
+            self._notify(thread_id, "failed", f"{t['title']}: turn failed", (res.error or "")[-200:],
+                         {"thread_id": thread_id, "turn_id": turn_id})
+        elif res.stop_reason != "cancelled" and wake_reason == "wait fired":  # a job came back: say what the agent made of it
+            j = self.db.one("SELECT label, name FROM jobs WHERE thread_id=? ORDER BY updated_at DESC LIMIT 1", (thread_id,))
+            what = (j["label"] or j["name"]) if j else "job"
+            self._notify(thread_id, "done", f"{t['title']}: {what} finished", first_line, {"thread_id": thread_id})
+        else:
+            done_after = float(self.settings.raw.get("notify_done_after_s", 600))  # owner-started turns: long ones only
+            if dur > done_after * 1000 and not res.error and self._resting_state(thread_id) == "idle":
+                self._notify(thread_id, "done", f"{t['title']}: turn finished", first_line, {"thread_id": thread_id})
         self._tasks.pop(thread_id, None)
         if thread_id in self._resume_after and not self.paused and self._resting_state(thread_id) == "idle":
             resume = self._resume_after.pop(thread_id)
