@@ -249,7 +249,7 @@ A hamburger to the left of the composer morphs into ✕. The menu is one sheet w
 
 | # | Fix | Layer | Phase |
 |---|---|---|---|
-| 1 | Push when a job-woken turn ends ("<label> finished · first line"); `/status` shows job state without a turn | brain, mobile | P0 |
+| 1 | Push when a job-woken turn ends: title "<thread>: <label> finished" (or failed), body = the agent's first line. `/status` (job state without a turn) moves to the P2 standup | brain, mobile | P0 |
 | 2 | Push on failed turns (a 10 h "`claude` not found" outage went silent) | brain | P0 |
 | 3 | Don't auto-archive threads with pending listening tests or jobs active within the TTL; show the TTL; repo sessions never expire | brain | P0 |
 | 4 | "Since you left" uses the client's `left_at`; finished/failed job counts actually render | api, mobile | P0 |

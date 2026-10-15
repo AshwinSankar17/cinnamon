@@ -40,7 +40,7 @@ Thread `{id, repo_id, title, mode: "readonly"|"worktree", branch, provider: "cla
 state: "idle"|"running"|"waiting"|"needs_you"|"paused", pinned, archived, muted, parent_id, fork_turn,
 last_seq, updated_at, last_event, vault_dir}` — `vault_dir` is set for training runs (the run's own vault folder)
 
-Repo `{id, name, path, default_branch, profile, archive_policy, vault_root}`
+Repo `{id, name, path, default_branch, profile, vault_root}`
 
 Event `{event_id, thread_id, seq, ts, type, visibility, turn_id, actor:{kind,device_id?}, payload,
 payload_ref?, hash, prev_hash}` — `payload` ≤ 8 KB; larger bodies are truncated (head + tail) with
@@ -74,7 +74,7 @@ pending until decided; never auto-denied.
 
 | Method & path | Body / query | Returns |
 |---|---|---|
-| GET `/v1/health` | — | `{ok, brain_pub, version, rung, paused}` (no auth) |
+| GET `/v1/health` | — | `{ok, brain_pub, version, rung, paused, checks:{providers:{name: bool}, sbatch: bool}}` (no auth; `checks` says whether each agent CLI and `sbatch` are on PATH) |
 | GET `/v1/repos` | — | `[Repo]` |
 | GET `/v1/threads` | `?repo_id&state&archived=0` | `[Thread]` |
 | POST `/v1/threads` | `{repo_id, title?, mode, provider, base_ref?, run?, message?}` | `Thread` — `run: true` = training run (worktree + own vault folder); `message` is sent as the first message |
@@ -89,8 +89,8 @@ pending until decided; never auto-denied.
 | POST `/v1/threads/{id}/provider` | `{provider}` | `Thread` (409 while a turn runs or an approval is pending) |
 | GET `/v1/push/vapid` | — | `{public_key}` — VAPID applicationServerKey for the PWA |
 | POST `/v1/devices/web-push` | `{subscription:{endpoint, keys:{p256dh, auth}}}` | `{ok}` — the PWA's Web Push subscription; notifications are RFC 8291-encrypted |
-| GET `/v1/providers` | — | `[{name, native_handoff, defer}]` |
-| GET `/v1/pending` | — | `{approvals:[Approval], waits:[…], jobs:[Job], threads_needing_you:[Thread], since:{…}}` |
+| GET `/v1/providers` | — | `[{name, native_handoff, defer, default}]` (`default`: Brain's `default_provider`) |
+| GET `/v1/pending?since=<epoch s>` | — | `{approvals:[Approval], waits:[…], jobs:[Job], threads_needing_you:[Thread], listening:[…], since:{ts, jobs_finished, jobs_failed, turns, edits, paused}}`. `since` is when the phone left (clamped to the last 7 days, never the future; default now−12 h); 422 if not a number |
 | POST `/v1/approvals/{id}/decision` | `{decision:"allow"|"deny", note?, device_sig}` sig over `"cb-dec-v1" ‖ id ‖ decision` | `Approval` |
 | GET `/v1/jobs` | — | `[Job]` `{job_id, thread_id, name, state, gpus, elapsed, time_limit}` |
 | POST `/v1/jobs/{id}/cancel` | — | `{ok}` |
