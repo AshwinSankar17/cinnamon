@@ -26,9 +26,11 @@ def test_activity_has_turns_and_jobs(brain):
 
 from brain import quota
 
+# The shape a real get_usage control_response carries (claude 2.x, 2026-10-15): windows nest under rate_limits.
 CLAUDE_USAGE = {"subscription_type": "team", "rate_limits_available": True,
-                "five_hour": {"utilization": 4, "resets_at": "2026-10-15T07:09:00Z"},
-                "seven_day": {"utilization": 21, "resets_at": "2026-10-17T18:59:00Z"}}
+                "rate_limits": {"five_hour": {"utilization": 4, "resets_at": "2026-10-15T07:09:00Z"},
+                                "seven_day": {"utilization": 21, "resets_at": "2026-10-17T18:59:00Z"},
+                                "seven_day_opus": None}}
 CODEX_LIMITS = {"primary": {"used_percent": 85.0, "window_minutes": 300, "resets_at": 1792040000},
                 "secondary": {"used_percent": 44.0, "window_minutes": 10080, "resets_at": 1792400000},
                 "plan_type": "plus", "credits": {"has_credits": False}}
@@ -45,6 +47,21 @@ def test_parsers_read_only_what_providers_report():
     reset = dt.datetime(2026, 10, 20, tzinfo=dt.timezone.utc).timestamp()
     assert quota.parse_agy(AGY_USAGE) == [{"name": "Gemini Models · week", "used_pct": 25.0, "resets_at": reset}]
     assert quota.parse_claude({"rate_limits_available": False}) == []
+
+
+def test_agy_probe_passes_a_relative_app_data_dir(brain, monkeypatch):
+    seen = []
+    monkeypatch.setattr(quota, "_run", lambda args, env, stdin=None: seen.append(args) or "")
+    quota._probe(brain, "agy")
+    flag = next(a for a in seen[0] if a.startswith("--app_data_dir="))
+    assert not flag.split("=", 1)[1].startswith("/")  # agy refuses absolute paths ("must not be absolute")
+
+
+def test_agy_probe_reads_the_command_result_event(brain, monkeypatch):
+    out = json.dumps({"event": "command_result", "command": {"name": "usage", "data": AGY_USAGE}}) + "\n" + \
+        json.dumps({"event": "result", "result": "ok"}) + "\n"
+    monkeypatch.setattr(quota, "_run", lambda args, env, stdin=None: out)
+    assert [w["name"] for w in quota._probe(brain, "agy")["windows"]] == ["Gemini Models · week"]
 
 
 def test_snapshot_caches_and_survives_a_hanging_probe(brain, monkeypatch):

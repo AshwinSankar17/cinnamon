@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-TTL_S, PROBE_TIMEOUT_S = 300, 15
+TTL_S, PROBE_TIMEOUT_S = 300, 40  # agy /usage takes ~12 s cold
 _cache: dict = {}
 _lock = threading.Lock()
 
@@ -33,9 +33,10 @@ def _ts(v) -> float | None:
 def parse_claude(o: dict) -> list[dict]:
     if not o or o.get("rate_limits_available") is False:
         return []
+    src = o.get("rate_limits") or o
     out = []
     for key, name in (("five_hour", "5 h"), ("seven_day", "week")):
-        w = o.get(key) or {}
+        w = src.get(key) or {}
         if w.get("utilization") is not None:
             out.append({"name": name, "used_pct": w["utilization"], "resets_at": _ts(w.get("resets_at"))})
     return out
@@ -105,9 +106,9 @@ def _probe(brain, name: str) -> dict:
                     return {"windows": parse_codex(rl), "plan": rl.get("plan_type"), "source": f"last Codex turn, {when}"}
         return {"windows": [], "plan": None, "source": "no Codex turn yet"}
     if name == "agy":
-        out = _run([binary, "-p", "/usage", "--output-format", "stream-json", f"--app_data_dir={root / 'agy'}"], {})
+        out = _run([binary, "-p", "/usage", "--output-format", "stream-json", f"--app_data_dir={os.path.relpath(root / 'agy', Path.home() / '.gemini')}"], {})
         for m in _json_lines(out):
-            body = m.get("result") if isinstance(m.get("result"), dict) else m
+            body = (m.get("command") or {}).get("data") or (m.get("result") if isinstance(m.get("result"), dict) else m)
             if isinstance(body, dict) and body.get("groups"):
                 return {"windows": parse_agy(body), "plan": None, "source": "agy /usage"}
         return {"windows": [], "plan": None, "source": "agy /usage"}
