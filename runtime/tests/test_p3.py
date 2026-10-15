@@ -62,3 +62,13 @@ def test_snapshot_caches_and_survives_a_hanging_probe(brain, monkeypatch):
     assert len(calls) == n
     with TestClient(create_app(brain, dev_no_auth=True)) as cl:
         assert "providers" in cl.get("/v1/quota").json()
+
+
+def test_rules_and_quiet_hours_switch(brain):
+    with TestClient(create_app(brain, dev_no_auth=True)) as c:
+        r = c.get("/v1/rules").json()
+        assert [g["head"] for g in r["groups"]] == ["Brain asks you first", "Never on the login node"]
+        assert r["quiet_hours"]["from"] == "23:00"
+        assert c.patch("/v1/settings", json={"quiet_hours_enabled": True}).json()["enabled"] is True
+        assert brain.settings.raw["quiet_hours_enabled"] is True
+        assert c.patch("/v1/settings", json={"default_provider": "x"}).status_code == 422

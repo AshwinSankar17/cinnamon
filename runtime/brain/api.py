@@ -77,6 +77,11 @@ class ForkReq(BaseModel):
 MAX_UPLOAD = 25 * 1024 * 1024
 
 
+class SettingsPatch(BaseModel):
+    model_config = {"extra": "forbid"}
+    quiet_hours_enabled: bool
+
+
 class ImportReq(BaseModel):
     provider: str
     session_id: str
@@ -433,6 +438,14 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             return brain.activity(tid, left_at)
         except KeyError:
             raise HTTPException(404, "no such thread")
+
+    @app.get("/v1/rules")
+    def get_rules(device: str = Depends(auth)) -> dict:
+        return brain.rules()
+
+    @app.patch("/v1/settings")
+    def patch_settings(b: SettingsPatch, device: str = Depends(auth)) -> dict:
+        return brain.set_quiet_hours(b.quiet_hours_enabled)
 
     @app.get("/v1/quota")
     def get_quota(refresh: int = 0, device: str = Depends(auth)) -> dict:

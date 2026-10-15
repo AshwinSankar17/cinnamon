@@ -900,6 +900,28 @@ class Brain:
                         "submitted_at": d["submitted_at"], "updated_at": d["updated_at"]})
         return out
 
+    def rules(self) -> dict:
+        """What Brain enforces (policy.py), in the owner's words, plus the one switch the phone may flip."""
+        return {"groups": [
+            {"head": "Brain asks you first", "items": [
+                {"text": "Writing outside the repo and its vault", "chip": "asks you"},
+                {"text": "Pushing to protected branches (main, master)", "chip": "asks you"},
+                {"text": "Deleting vaults or checkpoints", "chip": "asks you"},
+                {"text": "Global installs, git config, crontab", "chip": "asks you"}]},
+            {"head": "Never on the login node", "items": [
+                {"text": "Detached processes, tmux, sleep and squeue loops", "chip": "blocked"},
+                {"text": "Reading Brain's keys and tokens", "chip": "blocked"}]}],
+            "quiet_hours": self.quiet_hours()}
+
+    def quiet_hours(self) -> dict:
+        qh = [str(x) for x in self.settings.quiet_hours] + ["", ""]
+        return {"enabled": bool(self.settings.raw.get("quiet_hours_enabled", True)), "from": qh[0], "to": qh[1]}
+
+    def set_quiet_hours(self, enabled: bool) -> dict:
+        self.settings.raw["quiet_hours_enabled"] = bool(enabled)
+        self.settings.save(self.p)
+        return self.quiet_hours()
+
     FAILED_JOB_STATES = ("FAILED", "TIMEOUT", "OUT_OF_MEMORY", "NODE_FAIL")
 
     def activity(self, thread_id: str, left_at: float | None = None) -> dict:
