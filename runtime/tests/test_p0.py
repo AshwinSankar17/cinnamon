@@ -46,3 +46,12 @@ async def test_a_failed_turn_pushes_once_and_never_done(brain, pushes):
     kinds = [p[0] for p in pushes]
     assert kinds.count("failed") == 1 and "done" not in kinds
     assert pushes[kinds.index("failed")][1] == "EDIT TTS: turn failed"
+
+
+async def test_failed_job_push_uses_the_label(brain, pushes, monkeypatch):
+    from brain import slurm
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    _job(brain, t["id"], job_id="9002", label="v3_gate", state="RUNNING")
+    monkeypatch.setattr(brain.watcher, "poll", lambda jobs, force: [slurm.JobUpdate("9002", "FAILED", 1, "")])
+    await brain.tick()
+    assert ("failed", "v3_gate failed") in [(k, ti) for k, ti, _ in pushes]

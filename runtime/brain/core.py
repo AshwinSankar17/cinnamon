@@ -935,7 +935,7 @@ class Brain:
                 self.ir.log("job.end", job=u.job_id, state=u.state, exit=u.exit_code)
                 if u.state != "COMPLETED" and j:
                     t = self.thread(j["thread_id"])
-                    self._notify(j["thread_id"], "failed", f"{j['name']} {u.state.lower()}",
+                    self._notify(j["thread_id"], "failed", f"{j['label'] or j['name']} {u.state.lower()}",
                                  f"{t['title'] if t else ''} · exit {u.exit_code}", {"thread_id": j["thread_id"], "job_id": u.job_id})
         for w in self.db.q("SELECT * FROM waits WHERE state='open' AND kind IN ('slurm_job_completed','provider_quota_reset')"):
             pred = json.loads(w["predicate"])
