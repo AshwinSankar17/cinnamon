@@ -134,3 +134,9 @@ def test_real_out_of_scope_writes_are_still_caught():
     assert _out_of_scope_writes("echo hi > /etc/motd", CTX) == ["/etc/motd"]
     assert _out_of_scope_writes("cat > /home/other/x.sh <<'EOF'\nhi\nEOF", CTX) == ["/home/other/x.sh"]
     assert _out_of_scope_writes("rm -rf ~/.config/foo", CTX) == ["~/.config/foo"]
+
+
+def test_providers_mark_the_default(brain):
+    with TestClient(create_app(brain, dev_no_auth=True)) as c:
+        ps = c.get("/v1/providers").json()
+    assert [p["name"] for p in ps if p["default"]] == ["fake"]

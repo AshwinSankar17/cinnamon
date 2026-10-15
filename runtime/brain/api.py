@@ -375,7 +375,8 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
 
     @app.get("/v1/providers")
     def providers(device: str = Depends(auth)) -> list[dict]:
-        return [{"name": n, "native_handoff": getattr(p, "hydrate", None) is not None, "defer": getattr(p, "supports_defer", True)}
+        return [{"name": n, "native_handoff": getattr(p, "hydrate", None) is not None,
+                 "defer": getattr(p, "supports_defer", True), "default": n == brain.settings.default_provider}
                 for n, p in brain.providers.items()]
 
     @app.post("/v1/threads/{tid}/provider")

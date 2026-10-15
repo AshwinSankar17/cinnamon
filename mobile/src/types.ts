@@ -13,7 +13,7 @@ export type SkillInfo = {
 };
 
 /** GET /v1/providers */
-export type ProviderInfo = { name: Provider; native_handoff: boolean; defer: boolean };
+export type ProviderInfo = { name: Provider; native_handoff: boolean; defer: boolean; default?: boolean };
 export type ThreadMode = 'readonly' | 'worktree';
 
 export type Thread = {

@@ -82,7 +82,8 @@ export default function NewScreen() {
         const usable = p.filter((x) => x.name !== 'fake');
         setProviders(usable.length ? usable : p);
         if (!repoId && r.length) setRepoId(r[0].id);
-        if (usable.length && !usable.some((x) => x.name === provider)) setProvider(usable[0].name);
+        const pick = usable.find((x) => x.default) ?? usable[0];
+        if (pick) setProvider(pick.name);
       })
       .catch((e) => setLoadErr(describeError(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
