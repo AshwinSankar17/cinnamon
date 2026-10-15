@@ -244,3 +244,16 @@ export type PushData = {
   endpoint_sig?: string;
   ts?: string;
 };
+
+/** GET /v1/imports: one of the owner's terminal sessions Brain can pick up (runtime/brain/importer.py). */
+export type ImportCandidate = {
+  provider: 'claude' | 'codex';
+  session_id: string;
+  path: string;
+  cwd: string;
+  repo_path: string;
+  title: string;
+  last_ts: number;
+  live: boolean;
+  thread_id: string | null;
+};

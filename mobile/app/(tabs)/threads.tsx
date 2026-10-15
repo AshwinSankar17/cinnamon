@@ -107,7 +107,10 @@ export default function ThreadsScreen() {
       <TabHeader
         title="Threads"
         right={
-          <IconButton name="plus" label="Start a thread, run or idea" bordered onPress={() => router.push('/new')} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <IconButton name="refresh" label="Import terminal sessions" bordered onPress={() => router.push('/import')} />
+            <IconButton name="plus" label="Start a thread, run or idea" bordered onPress={() => router.push('/new')} />
+          </View>
         }
       />
       <ConnectionBanner />
