@@ -1066,6 +1066,8 @@ class Brain:
             sig = self.ident.sign(b"cb-ep-v1" + endpoint.encode() + ts.encode() + d["id"].encode())
             self.push.send(d["fcm_token"], "transport", "Endpoint changed", endpoint,
                            {"endpoint": endpoint, "endpoint_sig": sig, "ts": ts})
+            if d["web_push"]:  # the PWA has no silent transport channel: tell the owner where Brain went
+                self._send_web(d["id"], json.loads(d["web_push"]), "moved", "Brain moved", endpoint, {"endpoint": endpoint})
             sent += 1
         self.ir.log("endpoint", url=endpoint, devices=sent)
         return sent

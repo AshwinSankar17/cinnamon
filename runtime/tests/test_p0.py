@@ -166,3 +166,13 @@ def test_old_settings_files_still_load(tmp_path):
     saved = yaml.safe_load(p.settings.read_text())
     assert "archive_policy" not in saved["repos"][0]
     assert "max_hot_providers" not in saved and "idle_exit_seconds" not in saved
+
+
+def test_endpoint_change_reaches_pwa_devices(brain, monkeypatch):
+    import json as _json
+    brain.db.x("INSERT INTO devices(id, name, public_key, revoked, created_at, last_seen, web_push, approved)"
+               " VALUES ('d1','K','pk',0,0,0,?,1)", (_json.dumps({"endpoint": "https://push.example/x", "keys": {}}),))
+    web = []
+    monkeypatch.setattr(brain, "_send_web", lambda did, sub, kind, title, body, data: web.append((kind, body)))
+    brain.set_endpoint("https://brain.example.org")
+    assert web == [("moved", "https://brain.example.org")]

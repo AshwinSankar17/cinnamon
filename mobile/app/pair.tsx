@@ -7,6 +7,7 @@ import { Icon } from '@/components/Icon';
 import { Badge, Button, Card, Chip, Dot, Mono, SectionLabel, TabHeader } from '@/components/ui';
 import { clusterLabel, completePairing, describeError, forgetPairing, getAccessToken, getPairing, health, PendingApprovalError } from '@/src/api';
 import { b64urlDecode } from '@/src/b64';
+import { webDeviceName } from '@/src/format';
 import { useConnection } from '@/src/connection';
 import { fingerprint, fullFingerprint, parsePairingPayload, type PairingPayload } from '@/src/crypto';
 import { registerForPush, type PushSetup } from '@/src/push';
@@ -62,7 +63,7 @@ export default function PairScreen() {
         await forgetPairing();
         await wipeLocal();
       }
-      const name = Device.deviceName ?? Device.modelName ?? 'phone';
+      const name = Device.deviceName ?? Device.modelName ?? (Platform.OS === 'web' ? webDeviceName(navigator.userAgent) : 'phone');
       const r = await completePairing(payload, name);
       const h = await health();
       setTest({
