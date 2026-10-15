@@ -24,6 +24,14 @@ type Props = {
 
 const BAND = { needs_you: '', running: '#7FA86A', waiting: '#6C8EAD', idle: '#B8A898', paused: '#B8A898' } as const;
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+/** A title on two lines of at most n characters, breaking between words. */
+function wrap2(s: string, n: number): [string, string] {
+  const words = s.split(/\s+/);
+  let a = '';
+  while (words.length && (a ? a.length + 1 : 0) + words[0].length <= n) a = a ? `${a} ${words.shift()}` : (words.shift() as string);
+  if (!a) return [clip(s, n), ''];
+  return [a, clip(words.join(' '), n)];
+}
 
 function useLoop(live: boolean, ms: number, delay = 0) {
   const v = useRef(new Animated.Value(0)).current;
@@ -84,8 +92,8 @@ export function Presenters({ world, t, f, threads, live, showcase, fonts, onThre
             <Item key={th.id} f={f} x={16 + i * 124} y={216} w={110} h={76} rotate={[-2, 1.5, -1][i]} label={label} onPress={go}>
               <Path d={zig} fill={t.sPaper} stroke="rgba(0,0,0,.06)" />
               <Rect width={110} height={5} fill={band} />
-              <SvgText x={10} y={28} fontSize={13} fontFamily={fonts.display} fontWeight="600" fill="#2A1A10">{clip(name, 13)}</SvgText>
-              <SvgText x={10} y={46} fontSize={9.5} fontFamily={fonts.mono} fill="#6A5444">{state}</SvgText>
+              {wrap2(name, 14).map((ln, k) => <SvgText key={k} x={10} y={23 + k * 15} fontSize={12.5} fontFamily={fonts.display} fontWeight="600" fill="#2A1A10">{ln}</SvgText>)}
+              <SvgText x={10} y={55} fontSize={9.5} fontFamily={fonts.mono} fill="#6A5444">{state}</SvgText>
             </Item>
           );
         }
@@ -98,8 +106,8 @@ export function Presenters({ world, t, f, threads, live, showcase, fonts, onThre
               <Path d="M4 26H96L100 32V70L96 76H4L0 70V32Z" fill={t.sTag} />
               <Circle cx={50} cy={32} r={2.5} fill={t.sTagLine} />
               <Circle cx={12} cy={34} r={3.5} fill={band} />
-              <SvgText x={50} y={52} fontSize={12} textAnchor="middle" fontFamily={fonts.display} fill="#2A1D12">{clip(name, 13)}</SvgText>
-              <SvgText x={50} y={67} fontSize={9} textAnchor="middle" fontFamily={fonts.mono} fill="#5A4128">{state}</SvgText>
+              {wrap2(name, 14).map((ln, k) => <SvgText key={k} x={50} y={46 + k * 12} fontSize={11} textAnchor="middle" fontFamily={fonts.display} fill="#2A1D12">{ln}</SvgText>)}
+              <SvgText x={50} y={71} fontSize={8.5} textAnchor="middle" fontFamily={fonts.mono} fill="#5A4128">{state}</SvgText>
             </Item>
           );
         }
@@ -110,8 +118,8 @@ export function Presenters({ world, t, f, threads, live, showcase, fonts, onThre
               <Path d="M0 12H86" stroke={t.sRed} strokeWidth={1.5} />
               <Path d="M0 26H86M0 38H86M0 50H86" stroke={t.sCardLine} strokeWidth={0.8} />
               <Circle cx={43} cy={4} r={4} fill={band} />
-              <SvgText x={6} y={25} fontSize={15} fontFamily={fonts.hand} fontWeight="700" fill="#2B1D14">{clip(name, 11)}</SvgText>
-              <SvgText x={6} y={47} fontSize={13} fontFamily={fonts.hand} fill="#5A4636">{state}</SvgText>
+              {wrap2(name, 11).map((ln, k) => <SvgText key={k} x={6} y={24 + k * 14} fontSize={13.5} fontFamily={fonts.hand} fontWeight="700" fill="#2B1D14">{ln}</SvgText>)}
+              <SvgText x={6} y={53} fontSize={11} fontFamily={fonts.hand} fill="#5A4636">{state}</SvgText>
             </Item>
           );
         }

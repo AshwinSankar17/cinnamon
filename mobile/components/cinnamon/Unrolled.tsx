@@ -10,12 +10,13 @@ import { useWorld, useWorldFont } from '@/src/world';
 
 const RIBBON = ribbonPoints();
 
-export function Unrolled({ open, onClose, activity, title }: { open: boolean; onClose: () => void; activity: Activity | null; title: string }) {
+export function Unrolled({ open, onClose, activity, title, width }: { open: boolean; onClose: () => void; activity: Activity | null; title: string; width: number }) {
   const { tokens: t, world, showcase } = useWorld();
   const display = useWorldFont('display');
   const ui = useWorldFont('ui');
   const mono = useWorldFont('mono');
-  const { width: W, height: H } = useWindowDimensions();
+  const { height: H } = useWindowDimensions();
+  const W = width; // the app column, which on desktop is narrower than the window
   const sheet = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(sheet, { toValue: open ? 1 : 0, duration: 500, easing: Easing.bezier(0.32, 0.72, 0, 1), useNativeDriver: true }).start();

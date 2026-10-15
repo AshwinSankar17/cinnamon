@@ -7,7 +7,7 @@ import { plainText } from '@/components/Markdown';
 import { ThreadActionsSheet } from '@/components/ThreadActionsSheet';
 import { Chip, Dot, EmptyNote, IconButton, ListCard, Mono, ProviderPill, SectionLabel, BackHeader } from '@/components/ui';
 import { api } from '@/src/api';
-import { ago } from '@/src/format';
+import { ago, toMs } from '@/src/format';
 import { useRemote } from '@/src/hooks';
 import { getThreads, upsertThreads } from '@/src/store';
 import { colors, fonts, stateColor, stateLabel, type } from '@/src/theme';
@@ -83,7 +83,8 @@ export default function ThreadsScreen() {
         (t) =>
           !needle ||
           [t.title, t.repo_id, t.branch ?? '', lastEventLine(t)].some((s) => s.toLowerCase().includes(needle)),
-      );
+      )
+      .sort((a, b) => (toMs(b.updated_at) ?? 0) - (toMs(a.updated_at) ?? 0)); // last touched first, so stale threads sink on their own
   }, [threads, q, filter, showArchived]);
 
   const pinned = filtered.filter((t) => t.pinned);
@@ -94,7 +95,7 @@ export default function ThreadsScreen() {
       arr.push(t);
       m.set(t.repo_id, arr);
     }
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return [...m.entries()]; // in order of each repo's most recent thread (filtered is newest-first)
   }, [filtered]);
 
   const onChanged = (t: Thread) => {

@@ -88,7 +88,7 @@ export function WaitingCard({ world, t, waiting, more, live, fonts, onPress }: P
           </Svg>
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.6, color: kicker }}>
+          <Text numberOfLines={1} style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.6, color: kicker }}>
             {world.need}{more ? `  ·  +${more} MORE` : ''}
           </Text>
           <Text numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 19 * world.displayScale, color: ink }}>{waiting.title}</Text>
