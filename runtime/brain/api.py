@@ -422,8 +422,8 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
         return brain.events.search(q)
 
     @app.get("/v1/pending")
-    def pending(device: str = Depends(auth)) -> dict:
-        return brain.pending()
+    def pending(since: float | None = None, device: str = Depends(auth)) -> dict:
+        return brain.pending(since)
 
     @app.get("/v1/approvals/{aid}")
     def get_approval(aid: str, device: str = Depends(auth)) -> dict:

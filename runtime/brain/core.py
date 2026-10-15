@@ -977,7 +977,7 @@ class Brain:
             await asyncio.sleep(interval)
 
     # ---- pending / notifications / ledger --------------------------------------------------------
-    def pending(self) -> dict:
+    def pending(self, since: float | None = None) -> dict:
         approvals = [self.approval(r["id"]) for r in self.db.q("SELECT id FROM approvals WHERE state='pending' ORDER BY created_at")]
         waits = [dict(r) | {"predicate": json.loads(r["predicate"])} for r in
                  self.db.q("SELECT * FROM waits WHERE state='open' AND kind!='approval'")]
@@ -985,7 +985,7 @@ class Brain:
         need = [self.thread_view(dict(r)) for r in self.db.q("SELECT * FROM threads WHERE state='needs_you' AND archived=0")]
         listen = [dict(r) for r in self.db.q("SELECT id, thread_id, title, n_items, n_systems, created_at FROM listening_tests"
                                              " WHERE state='pending' ORDER BY created_at")]
-        since = now() - 12 * 3600
+        since = now() - 12 * 3600 if since is None else min(max(float(since), now() - 7 * 86400), now())
         fin = self.db.one("SELECT COUNT(*) AS n FROM jobs WHERE state='COMPLETED' AND updated_at>?", (since,))["n"]
         failed = self.db.one("SELECT COUNT(*) AS n FROM jobs WHERE state IN ('FAILED','TIMEOUT','OUT_OF_MEMORY','NODE_FAIL') AND updated_at>?", (since,))["n"]
         turns = self.db.one("SELECT COUNT(*) AS n, COALESCE(SUM(edits),0) AS e FROM turns WHERE ended_at>?", (since,))

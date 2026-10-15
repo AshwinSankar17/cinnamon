@@ -17,10 +17,10 @@ type InboxData = { pending: Pending; running: Thread[]; byId: Record<string, Thr
 
 
 async function loadInbox(): Promise<InboxData> {
-  const [pending, running, leftAt] = await Promise.all([
-    api.pending(),
+  const leftAt = await getMeta('left_at');
+  const [pending, running] = await Promise.all([
+    api.pending(leftAt ? Number(leftAt) : null),
     api.threads({ state: 'running', archived: 0 }),
-    getMeta('left_at'),
   ]);
   await upsertThreads([...pending.threads_needing_you, ...running]);
   const local = await getThreads(true);
@@ -34,14 +34,13 @@ function sinceProse(d: InboxData, paused: boolean): string {
   if (typeof s.text === 'string' && s.text) return s.text;
   if (typeof s.summary === 'string' && s.summary) return s.summary;
   const parts: string[] = [];
-  const done = d.pending.jobs.filter((j) => !ACTIVE.has(j.state.toLowerCase()));
-  const failed = done.filter((j) => /fail|timeout|out_of_memory|node_fail/i.test(j.state));
-  const finished = done.length - failed.length;
+  const finished = s.jobs_finished ?? 0;
+  const failedN = s.jobs_failed ?? 0;
   const jobs = (n: number) => (n === 1 ? 'job' : 'jobs');
-  if (finished && failed.length) parts.push(`${cap(word(finished))} ${jobs(finished)} finished and ${word(failed.length)} failed.`);
+  if (finished && failedN) parts.push(`${cap(word(finished))} ${jobs(finished)} finished and ${word(failedN)} failed.`);
   else if (finished) parts.push(`${cap(word(finished))} ${jobs(finished)} finished.`);
-  else if (failed.length) parts.push(`${cap(word(failed.length))} ${jobs(failed.length)} failed.`);
-  if (typeof s.files_changed === 'number' && s.files_changed > 0) parts.push(`${cap(word(s.files_changed))} files changed.`);
+  else if (failedN) parts.push(`${cap(word(failedN))} ${jobs(failedN)} failed.`);
+  if (typeof s.edits === 'number' && s.edits > 0) parts.push(`${cap(word(s.edits))} ${s.edits === 1 ? 'edit' : 'edits'}.`);
   const needs = d.pending.approvals.length + needsThreads(d.pending).length + (d.pending.listening?.length ?? 0);
   if (d.running.length) parts.push(`${cap(word(d.running.length))} ${d.running.length === 1 ? 'thread is' : 'threads are'} working.`);
   if (paused) parts.push('Brain is paused; nothing new will start until you resume.');

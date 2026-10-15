@@ -487,7 +487,8 @@ export const api = {
     return all;
   },
 
-  pending: () => authed<Pending>('GET', '/v1/pending'),
+  pending: (sinceMs?: number | null) =>
+    authed<Pending>('GET', sinceMs ? `/v1/pending?since=${Math.floor(sinceMs / 1000)}` : '/v1/pending'),
 
   /** POST /v1/approvals/{id}/decision with device_sig over "cb-dec-v1" ‖ id ‖ decision. */
   decide: async (id: string, decision: 'allow' | 'deny', note?: string) =>

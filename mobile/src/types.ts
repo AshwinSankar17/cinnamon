@@ -173,7 +173,7 @@ export type Since = {
   summary?: string;
   jobs_finished?: number;
   jobs_failed?: number;
-  files_changed?: number;
+  edits?: number;
   turns?: number;
   [k: string]: unknown;
 };

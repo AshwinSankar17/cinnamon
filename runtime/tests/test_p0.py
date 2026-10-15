@@ -99,3 +99,17 @@ def test_quiet_hours_hold_everything_but_approvals_then_send_one_digest(brain, m
     assert brain._flush_digest() == 1
     assert sent[-1][0] == "digest" and "1 update" in sent[-1][1]
     assert brain._flush_digest() == 0  # sent once
+
+
+def test_pending_uses_the_clients_left_at_and_clamps_it(brain):
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    _job(brain, t["id"], job_id="9004", state="COMPLETED")
+    _job(brain, t["id"], job_id="9005", state="FAILED")
+    left = time.time() - 60
+    s = brain.pending(left)["since"]
+    assert abs(s["ts"] - left) < 1 and s["jobs_finished"] == 1 and s["jobs_failed"] == 1
+    assert brain.pending(time.time() + 3600)["since"]["ts"] <= time.time()  # a phone clock in the future
+    assert brain.pending(0)["since"]["ts"] >= time.time() - 7 * 86400 - 1  # at most a week back
+    with TestClient(create_app(brain, dev_no_auth=True)) as c:
+        assert c.get(f"/v1/pending?since={left}").json()["since"]["jobs_finished"] == 1
+        assert c.get("/v1/pending?since=abc").status_code == 422
