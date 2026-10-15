@@ -21,8 +21,13 @@ import {
   type PairingPayload,
 } from './crypto';
 import type {
+  Activity,
   Approval,
+  DeviceSelf,
   ImportCandidate,
+  QuietHours,
+  Quota,
+  Rules,
   BrainEvent,
   Health,
   Job,
@@ -489,6 +494,13 @@ export const api = {
   },
 
   imports: () => authed<ImportCandidate[]>('GET', '/v1/imports'),
+  activity: (id: string, leftAtMs?: number | null) =>
+    authed<Activity>('GET', `/v1/threads/${encodeURIComponent(id)}/activity`, { query: leftAtMs ? { left_at: Math.floor(leftAtMs / 1000) } : {} }),
+  quota: (refresh = false) => authed<Quota>('GET', '/v1/quota', { query: refresh ? { refresh: 1 } : {} }),
+  rules: () => authed<Rules>('GET', '/v1/rules'),
+  setQuietHours: (enabled: boolean) => authed<QuietHours>('PATCH', '/v1/settings', { body: { quiet_hours_enabled: enabled } }),
+  deviceSelf: () => authed<DeviceSelf>('GET', '/v1/devices/self'),
+  signOutSelf: () => authed<{ revoked: boolean }>('POST', '/v1/devices/self/revoke'),
   importSession: (provider: string, session_id: string) =>
     authed<Thread>('POST', '/v1/imports', { body: { provider, session_id } }),
   pending: (sinceMs?: number | null) =>
