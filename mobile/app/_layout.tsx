@@ -21,6 +21,7 @@ import { registerForPush, useNotificationRouting } from '@/src/push';
 import { db, setMeta } from '@/src/store';
 import { colors } from '@/src/theme';
 import { brainSocket } from '@/src/ws';
+import { WorldProvider } from '@/src/world';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -87,6 +88,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <WorldProvider>
       <StatusBar style="dark" />
       {/* Phone-first: on a wide screen the app sits in a centred column on the strip board. */}
       <View style={{ flex: 1, backgroundColor: colors.ground }}>
@@ -102,6 +104,7 @@ export default function RootLayout() {
       </Stack>
       </View>
       </View>
+      </WorldProvider>
     </SafeAreaProvider>
   );
 }
