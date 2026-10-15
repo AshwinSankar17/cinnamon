@@ -427,6 +427,13 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
     def search(q: str, device: str = Depends(auth)) -> list[dict]:
         return brain.events.search(q)
 
+    @app.get("/v1/threads/{tid}/activity")
+    def thread_activity(tid: str, left_at: float | None = None, device: str = Depends(auth)) -> dict:
+        try:
+            return brain.activity(tid, left_at)
+        except KeyError:
+            raise HTTPException(404, "no such thread")
+
     @app.get("/v1/imports")
     def imports(device: str = Depends(auth)) -> list[dict]:
         return importer.candidates(brain)
