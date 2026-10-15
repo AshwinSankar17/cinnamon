@@ -32,16 +32,19 @@ export function useRemote<T>(fetcher: () => Promise<T>, opts: { pollMs?: number;
   const fetchRef = useRef(fetcher);
   fetchRef.current = fetcher;
 
+  const latest = useRef(0); // overlapping reloads (a slow relay, a burst of changes): only the newest request lands
   const reload = useCallback(async () => {
+    const n = ++latest.current;
     setLoading(true);
     try {
       const d = await fetchRef.current();
+      if (n !== latest.current) return;
       setData(d);
       setError(null);
     } catch (e) {
-      setError(describeError(e));
+      if (n === latest.current) setError(describeError(e));
     } finally {
-      setLoading(false);
+      if (n === latest.current) setLoading(false);
     }
   }, []);
 

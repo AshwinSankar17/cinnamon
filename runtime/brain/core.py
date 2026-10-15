@@ -153,22 +153,25 @@ class Brain:
     # A thread's state is derived from what is true now (a turn running, an approval or a listening test pending, the
     # last turn failed, an open wait or active job, Brain paused), never read back from threads.state: that column is
     # only written at turn boundaries and went stale (a lifted pause, a test registered between turns).
-    def _facts(self) -> dict[str, set[str]]:
+    def _facts(self) -> dict[str, Any]:
         ids = lambda sql, *a: {r[0] for r in self.db.q(sql, a)}  # noqa: E731
-        last: dict[str, str | None] = {}
-        for r in self.db.q("SELECT thread_id, stop_reason FROM turns WHERE ended_at IS NOT NULL ORDER BY started_at"):
-            last[r["thread_id"]] = r["stop_reason"]
+        seen = {r["id"]: r["seen_at"] or 0 for r in self.db.q("SELECT id, seen_at FROM threads")}
+        last: dict[str, tuple[str | None, float]] = {}
+        for r in self.db.q("SELECT thread_id, stop_reason, ended_at FROM turns WHERE ended_at IS NOT NULL ORDER BY started_at"):
+            last[r["thread_id"]] = (r["stop_reason"], r["ended_at"])
         return {
+            "paused": self.paused,
             "running": {tid for tid, task in self._tasks.items() if not task.done()},
             "approval": ids("SELECT thread_id FROM approvals WHERE state='pending'"),
             "listen": ids("SELECT thread_id FROM listening_tests WHERE state='pending'"),
-            "failed_turn": {tid for tid, stop in last.items() if stop == "error"},
+            # a failed last turn needs the owner until they open the thread (or a later turn ends)
+            "failed_turn": {tid for tid, (stop, end) in last.items() if stop == "error" and end > seen.get(tid, 0)},
             "wait": ids("SELECT thread_id FROM waits WHERE state='open' AND kind!='approval'")
                     | ids("SELECT thread_id FROM jobs WHERE thread_id IS NOT NULL AND state NOT IN (%s)"
                           % ",".join("?" * len(slurm.TERMINAL)), *slurm.TERMINAL),
         }
 
-    def state_of(self, tid: str, f: dict[str, set[str]] | None = None) -> str:
+    def state_of(self, tid: str, f: dict[str, Any] | None = None) -> str:
         f = f or self._facts()
         if tid in f["running"]:
             return "running"
@@ -176,14 +179,14 @@ class Brain:
             return "needs_you"  # a failed turn behind a usage-limit wait resumes by itself: that is waiting
         if tid in f["wait"]:
             return "waiting"
-        return "paused" if self.paused else "idle"
+        return "paused" if f["paused"] else "idle"
 
     def _last_reply(self, tid: str) -> dict | None:
         """The agent's latest finished turn: what "news" means (the owner's own messages and Brain's notices are not)."""
-        return self.db.one("SELECT ts, payload FROM events WHERE thread_id=? AND type='turn.ended' ORDER BY seq DESC LIMIT 1",
+        return self.db.one("SELECT seq, ts, payload FROM events WHERE thread_id=? AND type='turn.ended' ORDER BY seq DESC LIMIT 1",
                            (tid,))
 
-    def thread_view(self, t: dict, f: dict[str, set[str]] | None = None) -> dict:
+    def thread_view(self, t: dict, f: dict[str, Any] | None = None) -> dict:
         last = self.db.one("SELECT * FROM events WHERE thread_id=? AND visibility='user' ORDER BY seq DESC LIMIT 1",
                            (t["id"],))
         out = {k: t[k] for k in ("id", "repo_id", "title", "mode", "branch", "provider", "parent_id",
@@ -205,13 +208,17 @@ class Brain:
         views = [self.thread_view(dict(r), f) for r in self.db.q(sql, args)]
         return [v for v in views if not state or v["state"] == state]
 
-    def mark_seen(self, thread_id: str) -> float:
-        """The owner opened the thread: its news and failures so far are read (one owner, so one marker for all devices)."""
+    def mark_seen(self, thread_id: str, through_seq: int | None = None) -> float:
+        """The owner read the thread up to the event `through_seq` (default: everything so far). One owner, so one marker
+        for all devices; it only moves forward."""
         if not self.thread(thread_id):
             raise KeyError(thread_id)
         at = now()
-        self.db.x("UPDATE threads SET seen_at=? WHERE id=?", (at, thread_id))
-        return at
+        if through_seq is not None:
+            r = self.db.one("SELECT ts FROM events WHERE thread_id=? AND seq<=? ORDER BY seq DESC LIMIT 1", (thread_id, through_seq))
+            at = r["ts"] if r else 0
+        self.db.x("UPDATE threads SET seen_at=MAX(COALESCE(seen_at, 0), ?) WHERE id=?", (at, thread_id))
+        return self.thread(thread_id)["seen_at"]
 
     def backfill_seen(self) -> None:
         """Threads from before read markers start out read, so the first start does not flood the owner with news."""
@@ -995,7 +1002,7 @@ class Brain:
             return []
         cutoff = now() - ttl * 86400
         rows = self.db.q(
-            "SELECT id FROM threads t WHERE archived=0 AND pinned=0 AND state='idle' AND updated_at < ?"
+            "SELECT id FROM threads t WHERE archived=0 AND pinned=0 AND updated_at < ?"
             " AND NOT EXISTS (SELECT 1 FROM approvals a WHERE a.thread_id=t.id AND a.state='pending')"
             " AND NOT EXISTS (SELECT 1 FROM waits w WHERE w.thread_id=t.id AND w.state='open')"
             " AND NOT EXISTS (SELECT 1 FROM listening_tests l WHERE l.thread_id=t.id AND l.state='pending')"
@@ -1003,8 +1010,9 @@ class Brain:
             % ",".join("?" * len(slurm.TERMINAL)),
             (cutoff, cutoff, *slurm.TERMINAL))
         out = []
+        f = self._facts()
         for r in rows:
-            if r["id"] in self._tasks:
+            if r["id"] in self._tasks or self.state_of(r["id"], f) != "idle":  # needs the owner, waiting, or paused
                 continue
             self.db.x("UPDATE threads SET archived=1 WHERE id=?", (r["id"],))
             days = f"{ttl:g}"
@@ -1095,7 +1103,7 @@ class Brain:
 
     NEWS_DAYS = 7  # unread news and failures older than this have stopped being news
 
-    def attention(self, f: dict[str, set[str]] | None = None, live: list[dict] | None = None) -> list[dict]:
+    def attention(self, f: dict[str, Any] | None = None, live: list[dict] | None = None) -> list[dict]:
         """Everything that wants the owner, ranked by what blocks their agents: 1 an approval, 2 a failed turn, 3 jobs
         that failed since they last opened the thread, 4 a listening test, 5 a reply they have not read. Every client
         (home, inbox, threads, the companion) reads this one list, so they cannot disagree."""
@@ -1118,7 +1126,8 @@ class Brain:
         for tid in sorted(f["failed_turn"] - f["wait"] - f["running"] - listed, key=lambda x: -th.get(x, {}).get("updated_at", 0)):
             if tid not in th:
                 continue
-            turn = self.db.one("SELECT turn_id, ended_at FROM turns WHERE thread_id=? ORDER BY started_at DESC LIMIT 1", (tid,))
+            turn = self.db.one("SELECT turn_id, ended_at FROM turns WHERE thread_id=? AND ended_at IS NOT NULL"
+                               " ORDER BY started_at DESC LIMIT 1", (tid,))
             add(2, "needs", f"needs:{tid}:{turn['turn_id']}", tid, tid, f"{th[tid]['title']}: turn failed",
                 "Retry it or reply in the thread", turn["ended_at"])
         cutoff = now() - self.NEWS_DAYS * 86400
@@ -1147,9 +1156,9 @@ class Brain:
             if r and r["ts"] > max(t["seen_at"] or 0, cutoff):
                 text = json.loads(r["payload"]).get("text") or ""
                 first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "Replied since you last looked")
-                news.append((r["ts"], t, first[:160]))
-        for ts, t, first in sorted(news, key=lambda x: -x[0]):
-            add(5, "news", f"news:{t['id']}:{t['last_seq']}", t["id"], t["id"], f"{t['title']} replied", first, ts)
+                news.append((r["ts"], r["seq"], t, first[:160]))
+        for ts, seq, t, first in sorted(news, key=lambda x: -x[0]):  # keyed on the reply, so "Later" holds until a new one
+            add(5, "news", f"news:{t['id']}:{seq}", t["id"], t["id"], f"{t['title']} replied", first, ts)
         return items
 
     def skip_listening(self, lid: str) -> None:

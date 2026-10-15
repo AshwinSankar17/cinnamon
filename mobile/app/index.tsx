@@ -55,13 +55,17 @@ export default function StandupScreen() {
   const [wipeColor, setWipeColor] = useState<string | null>(null);
   const live = useLive(!menu && !hist && !brief);
 
+  const latest = useRef(0); // overlapping reloads: only the newest request lands
   const reload = useCallback(async () => {
+    const n = ++latest.current;
     try {
       const left = await getMeta('left_at').catch(() => null);
-      setS(await loadStandup(left ? Number(left) : null));
+      const next = await loadStandup(left ? Number(left) : null);
+      if (n !== latest.current) return;
+      setS(next);
       setErr(null);
     } catch (e) {
-      setErr(describeError(e));
+      if (n === latest.current) setErr(describeError(e));
     }
   }, []);
   // Brain announces every change (subscribe_all); the poll only covers a socket that is down.

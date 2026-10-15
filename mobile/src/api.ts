@@ -419,7 +419,8 @@ export const api = {
     authed<Thread[]>('GET', '/v1/threads', { query: q }),
   thread: (id: string) => authed<Thread>('GET', `/v1/threads/${encodeURIComponent(id)}`),
   /** The owner has read this thread up to now (Brain's read marker; clears its news and failures everywhere). */
-  markSeen: (id: string) => authed<{ seen_at: number }>('POST', `/v1/threads/${encodeURIComponent(id)}/seen`, {}),
+  markSeen: (id: string, throughSeq?: number) =>
+    authed<{ seen_at: number }>('POST', `/v1/threads/${encodeURIComponent(id)}/seen`, throughSeq ? { body: { through_seq: throughSeq } } : {}),
   /** run: a training run (worktree + its own vault folder). message: optional first message. */
   createThread: (b: {
     repo_id: string;

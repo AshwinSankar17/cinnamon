@@ -60,6 +60,7 @@ async def test_paused_brain_reads_paused_and_resuming_clears_it(brain):
 
 def test_a_failed_turn_needs_you_until_the_next_turn(brain):
     t = brain.create_thread("hi-tts-v3", "f", "worktree")["id"]
+    brain.db.x("UPDATE threads SET seen_at=?", (time.time() - 3600,))  # the failure came after the owner last looked
     _turn(brain, t, "error", ago=60)
     assert _state(brain, t) == "needs_you"
     _turn(brain, t, "end_turn", ago=10)
@@ -185,3 +186,89 @@ def test_subscribe_all_announces_changes_on_any_thread(brain):
         brain.events.append(t, "job.state", {"job_id": "1", "state": "FAILED"})
         msg = ws.receive_json()
         assert msg["op"] == "changed" and msg["thread_id"] == t and msg["type"] == "job.state" and "payload" not in msg
+
+
+# ---- review fixes -------------------------------------------------------------------------------
+
+def test_opening_a_thread_acknowledges_its_failed_turn(brain):
+    t = brain.create_thread("hi-tts-v3", "old failure", "worktree")["id"]
+    _turn(brain, t, "error", ago=60)
+    brain.db.x("UPDATE threads SET seen_at=?", (time.time() - 3600,))
+    assert _state(brain, t) == "needs_you" and _kinds(brain) == [("needs", t)]
+    brain.mark_seen(t)
+    assert _state(brain, t) == "idle" and _kinds(brain) == []
+
+
+def test_a_dangling_turn_from_a_crash_does_not_hide_the_failed_one(brain):
+    t = brain.create_thread("hi-tts-v3", "crash", "worktree")["id"]
+    brain.db.x("UPDATE threads SET seen_at=?", (time.time() - 3600,))
+    _turn(brain, t, "error", ago=60)
+    brain.db.x("INSERT INTO turns(turn_id, thread_id, provider, started_seq, started_at) VALUES ('dangling', ?, 'fake', 9, ?)",
+               (t, time.time()))
+    [i] = brain.pending()["attention"]
+    assert i["kind"] == "needs" and i["at"] is not None and "dangling" not in i["key"]
+
+
+def test_expiry_uses_the_derived_state(brain):
+    brain.settings.raw["thread_ttl_days"] = 3
+    failed = brain.create_thread("hi-tts-v3", "failed long ago", "worktree")["id"]
+    lifted = brain.create_thread("hi-tts-v3", "paused then resumed", "worktree")["id"]
+    brain.db.x("UPDATE threads SET seen_at=0")
+    _turn(brain, failed, "error", ago=5 * 86400)
+    brain.db.x("UPDATE threads SET state='paused' WHERE id=?", (lifted,))
+    brain.db.x("UPDATE threads SET updated_at=?", (time.time() - 5 * 86400,))
+    assert brain.expire_threads() == [lifted]
+
+
+def test_later_on_news_holds_until_a_new_reply(brain):
+    t = brain.create_thread("hi-tts-v3", "n", "worktree")["id"]
+    brain.db.x("UPDATE threads SET seen_at=?", (time.time() - 3600,))
+    brain.events.append(t, "turn.ended", {"text": "one"}, actor={"kind": "agent"})
+    key = brain.pending()["attention"][0]["key"]
+    brain.events.append(t, "system.notice", {"text": "unrelated"})
+    brain.events.append(t, "job.state", {"job_id": "1", "state": "RUNNING"})
+    assert brain.pending()["attention"][0]["key"] == key
+    brain.events.append(t, "turn.ended", {"text": "two"}, actor={"kind": "agent"})
+    assert brain.pending()["attention"][0]["key"] != key
+
+
+def test_seen_through_a_seq_leaves_later_replies_unread(brain):
+    t = brain.create_thread("hi-tts-v3", "s", "worktree")["id"]
+    brain.db.x("UPDATE threads SET seen_at=?", (time.time() - 3600,))
+    shown = brain.events.append(t, "turn.ended", {"text": "shown"}, actor={"kind": "agent"})
+    time.sleep(0.01)
+    brain.events.append(t, "turn.ended", {"text": "never on screen"}, actor={"kind": "agent"})
+    brain.mark_seen(t, through_seq=shown["seq"])
+    [i] = brain.pending()["attention"]
+    assert i["detail"] == "never on screen"
+    brain.mark_seen(t, through_seq=1)  # a stale call never moves the marker back
+    assert brain.pending()["attention"][0]["detail"] == "never on screen"
+    brain.mark_seen(t)
+    assert brain.pending()["attention"] == []
+
+
+def test_imported_sessions_arrive_read(brain, tmp_path, monkeypatch):
+    from brain import importer
+    t = brain.create_thread("hi-tts-v3", "imported", "worktree")["id"]
+    monkeypatch.setattr(brain, "create_thread", lambda *a, **k: brain.thread_view(brain.thread(t)))
+    brain.events.append(t, "turn.ended", {"text": "history"}, actor={"kind": "agent"})
+    importer._arrive_read(brain, t)
+    assert _kinds(brain) == []
+
+
+def test_subscribe_all_only_announces_what_lists_show(brain):
+    t = brain.create_thread("hi-tts-v3", "ws2", "worktree")["id"]
+    with TestClient(create_app(brain, dev_no_auth=True)) as c, c.websocket_connect("/v1/ws") as ws:
+        ws.send_json({"op": "subscribe", "thread_id": "*"})  # a thread literally named "*" must not block subscribe_all
+        ws.send_json({"op": "subscribe_all"})
+        ws.send_json({"op": "unsubscribe", "thread_id": "*"})
+        ws.send_json({"op": "ping"})
+        msgs = []
+        while (m := ws.receive_json())["op"] != "pong":
+            msgs.append(m)
+        brain.events.append(t, "tool.started", {"tool": "Bash"})
+        brain.events.append(t, "assistant.text", {"text": "thinking"})
+        brain.events.append(t, "turn.ended", {"text": "done"})
+        m = ws.receive_json()
+        assert (m["op"], m["type"]) == ("changed", "turn.ended")
+    assert not brain.events._global_subs, "the global queue is released when the socket closes"

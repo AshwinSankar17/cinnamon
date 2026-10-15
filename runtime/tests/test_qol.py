@@ -22,7 +22,8 @@ def test_idle_threads_expire_but_protected_ones_never_do(brain):
     needs = brain.create_thread("hi-tts-v3", "needs you", "worktree")
     waiting = brain.create_thread("hi-tts-v3", "waiting on a job", "worktree")
     brain.patch_thread(pinned["id"], pinned=True)
-    brain.db.x("UPDATE threads SET state='needs_you' WHERE id=?", (needs["id"],))
+    brain.db.x("INSERT INTO approvals(id, thread_id, action_type, summary, decision_summary, tool_input, state, created_at)"
+               " VALUES ('apr_q', ?, 'shell', 's', '{}', 'k', 'pending', 0)", (needs["id"],))  # state is derived, not stored
     brain.db.x("INSERT INTO waits(id, thread_id, kind, predicate, created_at) VALUES ('w1', ?, 'slurm_job_completed', '{}', 0)",
                (waiting["id"],))
     for t in (old, pinned, needs, waiting):

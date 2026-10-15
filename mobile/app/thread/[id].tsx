@@ -54,7 +54,8 @@ export default function ThreadScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      const seen = () => { api.markSeen(id).catch(() => undefined); };
+      // read through what this screen holds (and so showed), never further: a reply missed while the socket was down stays unread
+      const seen = (seq?: number) => { (seq ? Promise.resolve(seq) : lastSeq(id)).then((n) => api.markSeen(id, n)).catch(() => undefined); };
       let unsub: (() => void) | null = null;
       (async () => {
         const [localThread, localEvents] = await Promise.all([getThread(id), getEvents(id)]);
@@ -65,9 +66,9 @@ export default function ThreadScreen() {
           const t = await api.thread(id);
           if (cancelled) return;
           setThread(t);
-          seen();
           await upsertThreads([t]);
           await catchUp();
+          seen();
           setLoadErr(null);
         } catch (e) {
           if (!cancelled) setLoadErr(describeError(e));
@@ -76,7 +77,7 @@ export default function ThreadScreen() {
         const after = await lastSeq(id);
         unsub = brainSocket.subscribe(id, after, (ev) => {
           merge([ev]);
-          if (ev.type === 'turn.ended' || ev.type === 'job.state') seen(); // read as it arrives: not news elsewhere
+          if (ev.type === 'turn.ended' || ev.type === 'job.state') seen(ev.seq); // read as it arrives: not news elsewhere
           if (REFRESH_ON.has(ev.type)) {
             api.thread(id).then(
               (t) => {
