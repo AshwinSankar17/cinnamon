@@ -15,7 +15,7 @@ type Props = { world: WorldId; f: Frame; live: boolean; running: number; needs: 
 const PLACE: Record<WorldId, [number, number, number, number, number, number]> = {
   bakery: [336, 562, 76, 52, -40, -48],
   forest: [318, 650, 96, 92, -36, -84],
-  rustic: [326, 612, 104, 62, -52, -50],
+  rustic: [334, 656, 104, 62, -52, -50],
   space: [318, 312, 100, 112, -50, -64],
   tide: [180, 436, 70, 46, -38, -24],
 };
