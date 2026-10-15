@@ -1,4 +1,5 @@
 /** Wire types for Cluster Brain protocol v0.2 (protocol/API.md). */
+import type { Item as AttentionItem } from './attention';
 import type { ThreadState } from './theme';
 
 export type Provider = 'claude' | 'codex' | 'agy' | 'fake';
@@ -32,6 +33,8 @@ export type Thread = {
   last_seq: number;
   updated_at: string | number;
   last_event?: BrainEvent | null;
+  /** The agent replied since the owner last opened the thread (Brain's read marker). */
+  unseen?: boolean;
   /** Set for training runs: the run's own vault folder on the cluster. */
   vault_dir?: string | null;
 };
@@ -186,6 +189,7 @@ export type Pending = {
   jobs: Job[];
   threads_needing_you: Thread[];
   listening?: ListeningSummary[];
+  attention?: AttentionItem[]; // Brain's ranked list of what needs the owner (src/attention.ts)
   since: Since;
 };
 
@@ -213,7 +217,7 @@ export type ListeningTest = {
   thread_id: string;
   title: string;
   description: string;
-  state: 'pending' | 'rated';
+  state: 'pending' | 'rated' | 'skipped';
   systems: { id: string; label: string }[];
   items: ListenItem[];
   metrics: Record<string, Record<string, number | string>>;

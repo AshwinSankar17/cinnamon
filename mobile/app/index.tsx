@@ -19,13 +19,14 @@ import { Presenters } from '@/components/cinnamon/Presenters';
 import { Roll, ROLL_BASE, type Mood, type RollHandle } from '@/components/cinnamon/Roll';
 import { Unrolled } from '@/components/cinnamon/Unrolled';
 import { WaitingCard } from '@/components/cinnamon/WaitingCard';
+import { hrefOf, type Item } from '@/src/attention';
 import { api, describeError } from '@/src/api';
 import { statusOf, useConnection } from '@/src/connection';
 import { actionable, briefing, headline, later, loadStandup, subline, type Standup } from '@/src/standup';
+import { useLiveReload } from '@/src/hooks';
 import { getMeta } from '@/src/store';
 import { useLive, useWorld, useWorldFont } from '@/src/world';
 import { WORLDS, type WorldId } from '@/src/worlds';
-import { brainSocket } from '@/src/ws';
 
 export default function StandupScreen() {
   const conn = useConnection();
@@ -63,18 +64,9 @@ export default function StandupScreen() {
       setErr(describeError(e));
     }
   }, []);
-  // The home subscribes to no thread, so socket events rarely reach it: poll while it is on screen.
-  useFocusEffect(useCallback(() => { reload(); const iv = setInterval(reload, 20_000); return () => clearInterval(iv); }, [reload]));
-  useEffect(() => {
-    let last = 0;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const off = brainSocket.onAnyEvent(() => {
-      const wait = Math.max(0, 2000 - (Date.now() - last));
-      if (timer) return;
-      timer = setTimeout(() => { timer = null; last = Date.now(); reload(); }, wait);
-    });
-    return () => { off(); if (timer) clearTimeout(timer); };
-  }, [reload]);
+  // Brain announces every change (subscribe_all); the poll only covers a socket that is down.
+  useFocusEffect(useCallback(() => { reload(); const iv = setInterval(reload, 60_000); return () => clearInterval(iv); }, [reload]));
+  useLiveReload(reload);
 
   const pickWorld = useCallback((next: WorldId) => {
     if (next === id || wipeColor) return; // one wipe at a time
@@ -127,6 +119,7 @@ export default function StandupScreen() {
     }
   };
   const open = (href: string) => { setBrief(false); router.push(href as never); };
+  const openItem = (i: Item) => open(hrefOf(i));
   const snooze = async (key: string) => { await later(key).catch(() => undefined); reload(); };
 
   return (
@@ -186,7 +179,7 @@ export default function StandupScreen() {
             <WaitingCard world={world} t={t} item={top} more={Math.max(0, todo.length - (top && top.tier <= 4 ? 1 : 0))} live={live} showcase={showcase}
               petName={pet ? world.pet.name : null} fonts={{ display, mono, ui }}
               calm={{ title: `${pet ? `${world.pet.name} · ` : ''}${briefing(id, s, showcase).intro}`, detail: briefing(id, s, showcase).status }}
-              onPress={top && (pet || !s.items[1]) ? () => open(top.href) : () => setBrief(true)} onLater={() => top && snooze(top.key)} />
+              onPress={top && (pet || !s.items[1]) ? () => openItem(top) : () => setBrief(true)} onLater={() => top && snooze(top.key)} />
           </View>
         ) : null}
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', height: 58 }}>

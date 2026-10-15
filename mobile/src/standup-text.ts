@@ -13,7 +13,10 @@ export function headline(s: Standup, showcase: boolean): string {
   const name = showcase ? 'Your agent' : t.title;
   const jobs = s.runningJobs.filter((j) => j.thread_id === t.id);
   const label = (j: Job) => (showcase ? 'a job' : j.label || j.name);
-  if (t.state === 'needs_you') return `${name} needs you.`;
+  const top = s.items[0]?.thread_id === t.id ? s.items[0] : undefined; // the roll is the top item's thread: say why
+  if (t.state === 'needs_you' || (top && top.tier <= 2)) return `${name} needs you.`;
+  if (top?.kind === 'failed') return `${name} has failed jobs.`;
+  if (top?.kind === 'news' && t.state !== 'running') return `${name} replied.`;
   if (t.state === 'paused') return 'Brain is paused.';
   if (t.state === 'running') return jobs.length ? `${name} is working while ${label(jobs[0])} runs.` : `${name} is working.`;
   if (jobs.length === 1) return `${name} is waiting on ${label(jobs[0])}.`;

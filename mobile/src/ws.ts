@@ -18,6 +18,9 @@ import type { BrainEvent } from './types';
 
 type EventHandler = (e: BrainEvent) => void;
 type ReplayHandler = (throughSeq: number) => void;
+/** Something happened on some thread (or the socket reconnected and may have missed things): refetch what you show. */
+export type Change = { thread_id: string; type: string; seq: number };
+type ChangeHandler = (c: Change) => void;
 
 type Sub = { afterSeq: number; handlers: Set<EventHandler>; replay: Set<ReplayHandler> };
 
@@ -28,6 +31,7 @@ class BrainSocket {
   private ws: WebSocket | null = null;
   private subs = new Map<string, Sub>();
   private globalHandlers = new Set<EventHandler>();
+  private changeHandlers = new Set<ChangeHandler>();
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -77,10 +81,17 @@ class BrainSocket {
     };
   }
 
-  /** Receive every event on any subscribed thread (used to refresh lists). */
+  /** Receive every event on any subscribed thread. */
   onAnyEvent(h: EventHandler): () => void {
     this.globalHandlers.add(h);
     return () => this.globalHandlers.delete(h);
+  }
+
+  /** Hear about a change on any thread, subscribed or not (Brain's `subscribe_all`; no payloads). Lists use it. */
+  onChange(h: ChangeHandler): () => void {
+    if (!this.changeHandlers.size) this.sendRaw({ op: 'subscribe_all' });
+    this.changeHandlers.add(h);
+    return () => this.changeHandlers.delete(h);
   }
 
   get isOpen(): boolean {
@@ -126,18 +137,26 @@ class BrainSocket {
       this.lastRx = Date.now();
       setConnection({ ws: 'open' });
       for (const [threadId, sub] of this.subs) this.sendSubscribe(threadId, sub.afterSeq);
+      if (this.changeHandlers.size) {
+        this.sendRaw({ op: 'subscribe_all' });
+        this.changeHandlers.forEach((h) => h({ thread_id: '', type: 'reconnected', seq: 0 })); // whatever happened while away
+      }
       this.startPing();
     };
     ws.onmessage = (m) => {
       if (this.ws !== ws) return;
       this.lastRx = Date.now();
-      let msg: { op?: string; event?: BrainEvent; thread_id?: string; through_seq?: number };
+      let msg: { op?: string; event?: BrainEvent; thread_id?: string; through_seq?: number; type?: string; seq?: number };
       try {
         msg = JSON.parse(String(m.data));
       } catch {
         return;
       }
       if (msg.op === 'event' && msg.event) this.deliver(msg.event);
+      else if (msg.op === 'changed' && msg.thread_id) {
+        const c = msg as Change;
+        this.changeHandlers.forEach((h) => h(c));
+      }
       else if (msg.op === 'replay_complete' && msg.thread_id) {
         const sub = this.subs.get(msg.thread_id);
         if (sub && typeof msg.through_seq === 'number') {

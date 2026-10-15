@@ -418,6 +418,8 @@ export const api = {
   threads: (q: { repo_id?: string; state?: string; archived?: 0 | 1 } = { archived: 0 }) =>
     authed<Thread[]>('GET', '/v1/threads', { query: q }),
   thread: (id: string) => authed<Thread>('GET', `/v1/threads/${encodeURIComponent(id)}`),
+  /** The owner has read this thread up to now (Brain's read marker; clears its news and failures everywhere). */
+  markSeen: (id: string) => authed<{ seen_at: number }>('POST', `/v1/threads/${encodeURIComponent(id)}/seen`, {}),
   /** run: a training run (worktree + its own vault folder). message: optional first message. */
   createThread: (b: {
     repo_id: string;
@@ -442,6 +444,7 @@ export const api = {
     );
   },
   listening: (id: string) => authed<ListeningTest>('GET', `/v1/listening/${encodeURIComponent(id)}`),
+  skipListening: (id: string) => authed<{ ok: boolean }>('POST', `/v1/listening/${encodeURIComponent(id)}/skip`, {}),
   rateListening: (id: string, ratings: Record<string, ItemRating>) =>
     authed<ListenResult>('POST', `/v1/listening/${encodeURIComponent(id)}/ratings`, { body: { ratings } }),
   /** Audio needs auth headers, which <audio src> cannot send: fetch it and play a local blob URL. */

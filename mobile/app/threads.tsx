@@ -57,7 +57,7 @@ function lastEventLine(t: Thread): string {
 
 export default function ThreadsScreen() {
   const [showArchived, setShowArchived] = useState(false);
-  const { data, error, loading, reload, setData } = useRemote(() => loadThreads(showArchived), { pollMs: 30_000 });
+  const { data, error, loading, reload, setData } = useRemote(() => loadThreads(showArchived), { pollMs: 60_000, live: true });
   useEffect(() => {
     reload();
   }, [showArchived, reload]);
@@ -264,9 +264,10 @@ function ThreadRow({ t, first, showPin, onActions }: { t: Thread; first?: boolea
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {showPin ? <Icon name="pin" size={14} color={colors.text2} strokeWidth={2} /> : null}
-            <Text style={[type.rowTitle, { flex: 1, minWidth: 0 }]} numberOfLines={1}>
+            <Text style={[type.rowTitle, { flex: 1, minWidth: 0 }, t.unseen ? { fontFamily: fonts.sansBold } : null]} numberOfLines={1}>
               {t.title}
             </Text>
+            {t.unseen ? <View accessibilityLabel="unread reply" style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent }} /> : null}
             {t.muted ? <Icon name="mute" size={14} color={colors.text3} /> : null}
             <ProviderPill provider={t.provider} />
             <Mono style={{ color: colors.text3 }}>{ago(t.updated_at)}</Mono>

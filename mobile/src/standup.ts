@@ -4,7 +4,7 @@
  * The last good standup is cached so the home still renders, marked "as of", when Brain is unreachable.
  */
 import { api } from './api';
-import { attention, snooze, type Item } from './attention';
+import { snooze, visible, type Item } from './attention';
 import type { Activity } from './roll';
 import { getMeta, setMeta } from './store';
 import type { Job, Since, Thread } from './types';
@@ -13,8 +13,7 @@ import type { WorldId } from './worlds';
 export type Standup = {
   focus: Thread | null;
   threads: Thread[];
-  items: Item[]; // ranked: items[0] is the waiting card, the whole list is the companion's briefing
-  backlog: { listen: number };
+  items: Item[]; // Brain's ranked list minus "Later": items[0] is the waiting card, the list is the companion's briefing
   runningJobs: Job[];
   since: Since;
   activity: Activity | null;
@@ -25,7 +24,10 @@ export type Standup = {
 const ACTIVE = /pending|running|configuring|completing|requeued|suspended/i;
 const ts = (v: string | number) => (typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : Date.parse(v) || 0);
 
-function pickFocus(threads: Thread[], jobs: Job[]): Thread | null {
+/** The roll is the thread of the top item Brain ranked (so the headline and the waiting card agree), else the working one. */
+function pickFocus(threads: Thread[], jobs: Job[], top: Item | undefined): Thread | null {
+  const ranked = top && threads.find((t) => t.id === top.thread_id);
+  if (ranked) return ranked;
   const order = (t: Thread) =>
     t.state === 'needs_you' ? 0 : t.state === 'running' ? 1 : jobs.some((j) => j.thread_id === t.id) ? 2 : t.state === 'waiting' ? 3 : 4;
   return [...threads].sort((a, b) => order(a) - order(b) || ts(b.updated_at) - ts(a.updated_at))[0] ?? null;
@@ -35,15 +37,14 @@ export { headline, subline, briefing, actionable, itemTitle, itemDetail } from '
 
 export async function loadStandup(leftAtMs: number | null): Promise<Standup> {
   try {
-    const [pending, threads, jobs, snoozed] = await Promise.all([api.pending(leftAtMs), api.threads({ archived: 0 }), api.jobs().catch(() => []),
-                                                                 getMeta('snoozed').then((v) => (v ? JSON.parse(v) : {})).catch(() => ({}))]);
+    const [pending, threads, snoozed] = await Promise.all([api.pending(leftAtMs), api.threads({ archived: 0 }), getSnoozed()]);
     const runningJobs = pending.jobs.filter((j) => ACTIVE.test(j.state));
-    const focus = pickFocus(threads, runningJobs);
+    const items = visible(pending.attention, snoozed, Date.now());
+    const focus = pickFocus(threads, runningJobs, items[0]);
     const recent = [...threads].sort((a, b) => ts(b.updated_at) - ts(a.updated_at));
     const shown = focus ? [focus, ...recent.filter((t) => t.id !== focus.id)].slice(0, 3) : recent.slice(0, 3);
-    const { items, backlog } = attention({ pending, threads, jobs, now: Date.now(), snoozed });
     const activity = focus ? await api.activity(focus.id, leftAtMs).catch(() => null) : null;
-    const s: Standup = { focus, threads: shown, items, backlog, runningJobs,
+    const s: Standup = { focus, threads: shown, items, runningJobs,
                          since: pending.since, activity, asOf: Date.now() };
     setMeta('standup_cache', JSON.stringify(s)).catch(() => undefined);
     return s;
@@ -51,7 +52,7 @@ export async function loadStandup(leftAtMs: number | null): Promise<Standup> {
     const cached = await getMeta('standup_cache').catch(() => null);
     if (cached) {
       const c = JSON.parse(cached) as Standup; // a cache from before the ranking has no items
-      return { ...c, items: c.items ?? [], backlog: c.backlog ?? { listen: 0 }, stale: true };
+      return { ...c, items: c.items ?? [], stale: true };
     }
     throw e;
   }
@@ -59,6 +60,11 @@ export async function loadStandup(leftAtMs: number | null): Promise<Standup> {
 
 /** "Later": hide one item on this phone for four hours. Decides nothing on Brain. */
 export async function later(key: string): Promise<void> {
-  const cur = await getMeta('snoozed').then((v) => (v ? JSON.parse(v) : {})).catch(() => ({}));
-  await setMeta('snoozed', JSON.stringify(snooze(cur, key, Date.now())));
+  await setMeta('snoozed', JSON.stringify(snooze(await getSnoozed(), key, Date.now())));
 }
+
+/** Bring back everything this phone set aside. */
+export const clearSnoozed = (): Promise<void> => setMeta('snoozed', '{}');
+
+export const getSnoozed = (): Promise<Record<string, number>> =>
+  getMeta('snoozed').then((v) => (v ? JSON.parse(v) : {})).catch(() => ({}));
