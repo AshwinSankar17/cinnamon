@@ -152,6 +152,15 @@ def test_import_is_idempotent_and_lists_the_thread(owner, brain):
     assert [c["thread_id"] for c in importer.candidates(brain)] == [a["id"]]
 
 
+def test_imported_thread_keeps_the_sessions_age_so_it_ranks_by_real_activity(owner, brain):
+    import os, time
+    src = _claude_session(owner["profile"], owner["repo"], "s9")
+    day_ago = time.time() - 86400
+    os.utime(src, (day_ago, day_ago))
+    t = importer.import_session(brain, "claude", "s9", provider_override="fake")
+    assert abs(brain.thread(t["id"])["updated_at"] - day_ago) < 5  # not the import time
+
+
 def test_import_registers_a_new_repo_with_a_unique_id(owner, brain, tmp_path):
     other = tmp_path / "x" / "hi-tts-v3"  # same folder name as the fixture repo, different path
     other.mkdir(parents=True)

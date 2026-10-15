@@ -29,7 +29,10 @@ import { brainSocket } from '@/src/ws';
 export default function StandupScreen() {
   const conn = useConnection();
   const insets = useSafeAreaInsets();
-  const { width: W, height: H } = useWindowDimensions();
+  const win = useWindowDimensions();
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null); // the app column, not the window (desktop caps it)
+  const W = box?.w ?? win.width;
+  const H = box?.h ?? win.height;
   const { world, id, tokens: t, dark, pet, showcase, setWorld } = useWorld();
   const display = useWorldFont('display');
   const ui = useWorldFont('ui');
@@ -90,6 +93,7 @@ export default function StandupScreen() {
   if (!conn.paired) return <Redirect href="/pair" />;
 
   const f = frameFor(W, H);
+  const short = Math.min(1, H / 844); // a short browser window shrinks the scene; the headline follows so they never meet
   const asleep = status !== 'live' && status !== 'connecting';
   const mood: Mood = asleep || s?.stale ? 'asleep' : s?.waiting ? 'needs' : s?.runningJobs.length || s?.focus?.state === 'running' ? 'working' : 'proud';
   const [hx, hy, hs] = HERO[id];
@@ -123,8 +127,19 @@ export default function StandupScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg2, overflow: 'hidden' }}>
-      <Svg width={W} height={H} viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute' }}>
+    <View style={{ flex: 1, backgroundColor: t.bg2, overflow: 'hidden' }}
+      onLayout={(e) => { const { width, height } = e.nativeEvent.layout; setBox((b) => (b && b.w === width && b.h === height ? b : { w: width, h: height })); }}>
+      {(f.ox > 0 ? [[0, f.ox, '11 0 0.5 844'], [W - f.ox, f.ox, `${id === 'forest' ? 11 : 379} 0 0.5 844`]] as const : []).map(([left, w, vb]) => (
+        // the scene's outermost column stretched across a wide screen's margins: walls, sky and counters run on
+        <Svg key={vb} width={w + 1} height={H} viewBox={vb} preserveAspectRatio="none" style={{ position: 'absolute', left: left - 0.5 }}>
+          <SceneDefs t={t} />
+          <Backdrop t={t} dark={dark} />
+        </Svg>
+      ))}
+      {f.ox > 0 ? [0, W - f.ox].map((left) => ( // a light veil so the margins recede and the scene reads as the stage
+        <View key={left} pointerEvents="none" style={{ position: 'absolute', left, top: 0, width: f.ox, height: H, backgroundColor: t.bg2, opacity: 0.35 }} />
+      )) : null}
+      <Svg width={390 * f.s} height={844 * f.s} viewBox="0 0 390 844" style={{ position: 'absolute', left: f.ox, top: f.oy }}>
         <SceneDefs t={t} />
         <Backdrop t={t} dark={dark} />
       </Svg>
@@ -160,7 +175,7 @@ export default function StandupScreen() {
             <Text style={{ fontFamily: mono, fontSize: 11, color: t.ink2 }}>{liveText}</Text>
           </View>
         </View>
-        <Text accessibilityRole="header" style={{ marginTop: 10, fontFamily: display, fontSize: 29 * world.displayScale, lineHeight: 32 * world.displayScale, color: t.ink }}>
+        <Text accessibilityRole="header" style={{ marginTop: 10, fontFamily: display, fontSize: 29 * world.displayScale * short, lineHeight: 32 * world.displayScale * short, color: t.ink }}>
           {s ? headline(s, showcase) : err ? 'Brain is not reachable.' : ' '}
         </Text>
         <Text style={{ marginTop: 8, maxWidth: 330, fontFamily: ui, fontSize: 13.5, lineHeight: 19, color: t.ink2 }}>
@@ -201,7 +216,7 @@ export default function StandupScreen() {
                    opacity: wipe.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 1, 0] }),
                    transform: [{ scale: wipe.interpolate({ inputRange: [0, 1, 2], outputRange: [0.001, 1, 1] }) }] }} />
       ) : null}
-      <Unrolled open={hist} onClose={() => setHist(false)} activity={s?.activity ?? null} title={s?.focus?.title ?? 'This thread'} />
+      <Unrolled open={hist} onClose={() => setHist(false)} activity={s?.activity ?? null} title={s?.focus?.title ?? 'This thread'} width={W} />
       <Menu open={menu} onClose={() => setMenu(false)} onPickWorld={pickWorld} />
     </View>
   );

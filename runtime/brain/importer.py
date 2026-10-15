@@ -298,6 +298,8 @@ def _import(brain, provider: str, session_id: str, provider_override: str | None
         f"message continues it here in a new session; the terminal's session is untouched and later terminal turns "
         f"do not appear here." + (f" The model is given the last {len(items) - cut} items; the full history stays in "
                                   f"this thread." if cut else ""))})
-    brain.db.x("UPDATE threads SET imported_from=? WHERE id=?", (key, tid))  # last: a failed import is never "done"
+    # last: a failed import is never "done". updated_at is the session's own last activity, not the import time, so an
+    # old session ranks below the threads actually being worked on.
+    brain.db.x("UPDATE threads SET imported_from=?, updated_at=? WHERE id=?", (key, cand["last_ts"], tid))
     brain.ir.log("import", thread=tid, source=key, items=len(items))
     return brain.thread_view(brain.thread(tid))
