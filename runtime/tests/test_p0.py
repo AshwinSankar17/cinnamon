@@ -265,3 +265,32 @@ async def test_a_job_woken_turn_waiting_on_approval_does_not_push_finished(brain
     await brain.tick()
     await _settle(brain, t["id"])
     assert [k for k, _, _ in pushes if k == "done"] == []
+
+
+# ---- follow-ups -----------------------------------------------------------------------------------
+def test_digest_keeps_items_that_arrive_during_the_send(brain, monkeypatch):
+    t = brain.create_thread("hi-tts-v3", "EDIT TTS", "worktree")
+    brain.db.x("INSERT INTO digest(ts, thread_id, kind, title, body) VALUES (1, ?, 'done', 'first', 'x')", (t["id"],))
+
+    def slow_send(kind, title, body, data):  # a new item lands while the push is in flight
+        brain.db.x("INSERT INTO digest(ts, thread_id, kind, title, body) VALUES (?, ?, 'done', 'late', 'y')", (time.time(), t["id"]))
+    monkeypatch.setattr(brain, "_push_all", slow_send)
+    monkeypatch.setattr(brain, "_quiet_now", lambda at=None: False)
+    assert brain._flush_digest() == 1
+    assert [r["title"] for r in brain.db.q("SELECT title FROM digest")] == ["late"]
+
+
+def test_digest_drops_items_from_threads_muted_or_archived_since(brain, monkeypatch):
+    sent = []
+    monkeypatch.setattr(brain, "_push_all", lambda kind, title, body, data: sent.append(body))
+    monkeypatch.setattr(brain, "_quiet_now", lambda at=None: False)
+    keep = brain.create_thread("hi-tts-v3", "keep", "worktree")
+    mute = brain.create_thread("hi-tts-v3", "mute", "worktree")
+    gone = brain.create_thread("hi-tts-v3", "gone", "worktree")
+    for t, title in ((keep, "kept"), (mute, "muted"), (gone, "archived")):
+        brain.db.x("INSERT INTO digest(ts, thread_id, kind, title, body) VALUES (1, ?, 'done', ?, 'x')", (t["id"], title))
+    brain.patch_thread(mute["id"], muted=True)
+    brain.patch_thread(gone["id"], archived=True)
+    assert brain._flush_digest() == 1
+    assert sent == ["kept"]
+    assert brain.db.q("SELECT 1 FROM digest") == []

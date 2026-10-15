@@ -1040,14 +1040,18 @@ class Brain:
         """After quiet hours: one push summarising what was held. Returns how many items it covered."""
         if self._quiet_now():
             return 0
-        rows = self.db.q("SELECT title FROM digest ORDER BY ts")
+        rows = self.db.q("SELECT d.ts, d.kind, d.title, t.muted, t.archived FROM digest d"
+                         " LEFT JOIN threads t ON t.id=d.thread_id ORDER BY d.ts")
         if not rows:
             return 0
-        n = len(rows)
-        self._push_all("digest", f"While you were away: {n} update{'s' if n != 1 else ''}",
-                       " · ".join(r["title"] for r in rows[:3])[:240], {})
-        self.db.x("DELETE FROM digest")
-        return n
+        cut = rows[-1]["ts"]  # only what was read; anything held while the push is in flight waits for the next flush
+        keep = [r for r in rows if not r["archived"] and not (r["muted"] and r["kind"] not in ("approval", "needs_you"))]
+        if keep:
+            n = len(keep)
+            self._push_all("digest", f"While you were away: {n} update{'s' if n != 1 else ''}",
+                           " · ".join(r["title"] for r in keep[:3])[:240], {})
+        self.db.x("DELETE FROM digest WHERE ts <= ?", (cut,))
+        return len(keep)
 
     def _send_web(self, device_id: str, sub: dict, kind: str, title: str, body: str, data: dict) -> None:
         msg = {"title": title[:120], "body": body[:240], "data": {"v": "1", "kind": kind, **data}}
