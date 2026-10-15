@@ -294,3 +294,10 @@ def test_digest_drops_items_from_threads_muted_or_archived_since(brain, monkeypa
     assert brain._flush_digest() == 1
     assert sent == ["kept"]
     assert brain.db.q("SELECT 1 FROM digest") == []
+
+
+def test_sed_scripts_given_with_e_are_not_write_targets():
+    assert _out_of_scope_writes("sed -i -e 's/a/b/' -e '/^#/d' f.py", CTX) == []
+    assert _out_of_scope_writes("sed -i --expression='s/a/b/' f.py", CTX) == []
+    assert _out_of_scope_writes("sed -i -e 's/a/b/' /etc/hosts", CTX) == ["/etc/hosts"]
+    assert _out_of_scope_writes("sed -i 's/a/b/' /etc/hosts", CTX) == ["/etc/hosts"]

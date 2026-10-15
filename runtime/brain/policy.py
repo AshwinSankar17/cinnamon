@@ -108,6 +108,21 @@ def _out_of_scope_writes(cmd: str, ctx: PolicyContext) -> list[str]:
     return out
 
 
+def _sed_files(words: list[str]) -> list[str]:
+    """The files `sed -i` edits: scripts come from -e/-f (each takes a value) or, without them, the first operand."""
+    files, scripted, skip = [], False, False
+    for w in words:
+        if skip:
+            skip = False
+        elif w in ("-e", "-f", "--expression", "--file"):
+            scripted, skip = True, True
+        elif w.startswith(("--expression=", "--file=")) or (w[:2] in ("-e", "-f") and len(w) > 2 and not w.startswith("--")):
+            scripted = True
+        elif not w.startswith("-"):
+            files.append(w)
+    return files if scripted else files[1:]
+
+
 def _write_targets(cmd: str, ctx: PolicyContext) -> list[str]:
     words_list, targets = _parse(cmd)
     for words in words_list:
@@ -120,7 +135,7 @@ def _write_targets(cmd: str, ctx: PolicyContext) -> list[str]:
         elif prog in WRITES_LAST and len(args) >= 2:
             targets.append(args[-1])
         elif prog == "sed" and any(w.startswith("-i") or w == "--in-place" for w in words[1:]):
-            targets += [a for a in args[1:]]
+            targets += _sed_files(words[1:])
         elif prog == "dd":
             targets += [w[3:] for w in words[1:] if w.startswith("of=")]
     return [t for t in targets if not t.startswith(("/dev/", "&"))]
