@@ -439,6 +439,21 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
         except KeyError:
             raise HTTPException(404, "no such thread")
 
+    @app.get("/v1/devices/self")
+    def device_self(device: str = Depends(auth)) -> dict:
+        d = brain.db.one("SELECT * FROM devices WHERE id=?", (device,))
+        if not d:
+            raise HTTPException(404, "unknown device")
+        others = brain.db.one("SELECT COUNT(*) AS n FROM devices WHERE revoked=1")["n"]
+        return {"id": d["id"], "name": d["name"], "created_at": d["created_at"], "last_seen": d["last_seen"],
+                "web_push": bool(d["web_push"]), "revoked_others": others}
+
+    @app.post("/v1/devices/self/revoke")
+    def device_self_revoke(device: str = Depends(auth)) -> dict:
+        brain.pairing.revoke(device)  # the phone also forgets its own key; this makes the old one useless here
+        brain.ir.log("device.signout", device=device)
+        return {"revoked": True}
+
     @app.get("/v1/rules")
     def get_rules(device: str = Depends(auth)) -> dict:
         return brain.rules()

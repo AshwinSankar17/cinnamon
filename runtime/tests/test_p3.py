@@ -72,3 +72,13 @@ def test_rules_and_quiet_hours_switch(brain):
         assert c.patch("/v1/settings", json={"quiet_hours_enabled": True}).json()["enabled"] is True
         assert brain.settings.raw["quiet_hours_enabled"] is True
         assert c.patch("/v1/settings", json={"default_provider": "x"}).status_code == 422
+
+
+def test_self_device_and_sign_out(brain):
+    from test_flows import _pair
+    with TestClient(create_app(brain)) as c:
+        k, dev, h, _ = _pair(c, brain)
+        me = c.get("/v1/devices/self", headers=h).json()
+        assert me["id"] == dev and me["web_push"] is False
+        assert c.post("/v1/devices/self/revoke", headers=h).json() == {"revoked": True}
+        assert c.get("/v1/devices/self", headers=h).status_code in (401, 403)
