@@ -13,6 +13,7 @@
     "expo-crypto": "~57.0.3",
     "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
+    "expo-document-picker": "~57.0.3",
     "expo-font": "~57.0.4",
     "expo-linking": "~57.0.11",
     "expo-network": "~57.0.2",
@@ -22,6 +23,8 @@
     "expo-splash-screen": "~57.0.9",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "katex": "^0.19.0",
+    "marked": "^18.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -34,6 +37,7 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.8",
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
   },

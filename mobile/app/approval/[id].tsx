@@ -51,7 +51,7 @@ export default function ApprovalScreen() {
           if (cancelled) return;
           setApproval(a);
           setErr(a ? null : 'This approval is no longer pending. It may have been decided from another device.');
-          if (a) {
+          if (a && !a.thread_id.startsWith('brain:')) {
             const local = await getThread(a.thread_id);
             if (local) setThread(local);
             else
@@ -90,7 +90,9 @@ export default function ApprovalScreen() {
   };
 
   const d = approval?.decision_summary;
-  const subtitle = [thread?.title ?? approval?.thread_id, thread ? providerShort[thread.provider] : null].filter(Boolean).join(' · ');
+  const subtitle = approval?.thread_id.startsWith('brain:')
+    ? 'Brain · new device'
+    : [thread?.title ?? approval?.thread_id, thread ? providerShort[thread.provider] : null].filter(Boolean).join(' · ');
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>

@@ -104,10 +104,10 @@ export const stateLabel: Record<ThreadState, string> = {
   paused: 'Paused',
 };
 
-export const providerShort: Record<string, string> = { claude: 'CC', codex: 'CX', gemini: 'GM', fake: 'FK' };
+export const providerShort: Record<string, string> = { claude: 'CC', codex: 'CX', agy: 'AG', fake: 'FK' };
 export const providerName: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
-  gemini: 'Gemini',
+  agy: 'Antigravity',
   fake: 'Fake',
 };

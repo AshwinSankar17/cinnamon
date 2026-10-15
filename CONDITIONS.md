@@ -4,7 +4,7 @@ This is the one page to hand your cluster admin. `brain init` prints it and will
 accept it with `--accept-conditions`.
 
 **What it is.** Cluster Brain is a small per-user service that lets its owner run coding agents (Claude
-Code, Codex, Gemini CLI) and SLURM experiments from a phone. It runs as the owner's account, never as root,
+Code, Codex, Antigravity) and SLURM experiments from a phone. It runs as the owner's account, never as root,
 one instance per user.
 
 **Where it runs.** `brain init` probes the site and picks one placement:
@@ -22,6 +22,10 @@ one instance per user.
   submit those with `brain submit`, which goes through `sbatch`.
 - Agents are blocked from running `nohup`, `setsid`, `disown`, tmux/screen, background `&` jobs, and
   `sleep`/`squeue` polling loops on the login node.
+- Agents change files only inside their thread's repo worktree, that repo's vault and temp directories.
+  Anything else (writing elsewhere in the owner's home, user-wide config such as `git config --global`,
+  `pip install --user`, `npm -g`, crontab) waits for the owner's explicit approval on their phone. Codex runs
+  in its OS sandbox with exactly that write scope; for the other agents Brain's command policy enforces it.
 
 **How it uses SLURM.**
 - Every job Brain submits is named `brain.<thread8>.<run8>`, carries

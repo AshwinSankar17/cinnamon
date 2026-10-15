@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, View, useWindowDimensions } from 'react-native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -15,7 +15,7 @@ import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
 import { IBMPlexMono_400Regular } from '@expo-google-fonts/ibm-plex-mono/400Regular';
 import { IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono/500Medium';
 
-import { health, loadPairing } from '@/src/api';
+import { health, loadPairing, refreshEndpoints } from '@/src/api';
 import { startNetworkTracking, useConnection } from '@/src/connection';
 import { registerForPush, useNotificationRouting } from '@/src/push';
 import { db, setMeta } from '@/src/store';
@@ -41,6 +41,7 @@ export default function RootLayout() {
     IBMPlexMono_500Medium,
   });
   const [booted, setBooted] = useState(false);
+  const wide = useWindowDimensions().width > 800;
   const { paired } = useConnection();
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function RootLayout() {
     if (!booted || !paired) return;
     brainSocket.start();
     health().catch(() => undefined);
+    refreshEndpoints().catch(() => undefined); // failover relay list
     registerForPush(false).catch(() => undefined);
     return () => brainSocket.stop();
   }, [booted, paired]);
@@ -86,12 +88,20 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
+      {/* Phone-first: on a wide screen the app sits in a centred column on the strip board. */}
+      <View style={{ flex: 1, backgroundColor: colors.ground }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center', borderLeftWidth: wide ? 1 : 0, borderRightWidth: wide ? 1 : 0, borderColor: colors.hairline }}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="pair" />
         <Stack.Screen name="thread/[id]" options={{ contentStyle: { backgroundColor: colors.surface } }} />
         <Stack.Screen name="approval/[id]" />
+        <Stack.Screen name="new" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="listen/[id]" />
+        <Stack.Screen name="files/[id]" />
       </Stack>
+      </View>
+      </View>
     </SafeAreaProvider>
   );
 }

@@ -1,7 +1,19 @@
 /** Wire types for Cluster Brain protocol v0.2 (protocol/API.md). */
 import type { ThreadState } from './theme';
 
-export type Provider = 'claude' | 'codex' | 'gemini' | 'fake';
+export type Provider = 'claude' | 'codex' | 'agy' | 'fake';
+
+/** GET /v1/threads/{id}/skills: what the thread's provider runs as "/name args". */
+export type SkillInfo = {
+  name: string;
+  description: string;
+  kind: 'skill' | 'command';
+  scope: 'project' | 'user' | 'plugin' | 'builtin';
+  args?: string | null;
+};
+
+/** GET /v1/providers */
+export type ProviderInfo = { name: Provider; native_handoff: boolean; defer: boolean; default?: boolean };
 export type ThreadMode = 'readonly' | 'worktree';
 
 export type Thread = {
@@ -20,6 +32,8 @@ export type Thread = {
   last_seq: number;
   updated_at: string | number;
   last_event?: BrainEvent | null;
+  /** Set for training runs: the run's own vault folder on the cluster. */
+  vault_dir?: string | null;
 };
 
 /** API.md does not define Repo; these are the fields the app reads, all others are kept as-is. */
@@ -28,6 +42,7 @@ export type Repo = {
   name?: string;
   path?: string;
   default_branch?: string;
+  vault_root?: string;
   [k: string]: unknown;
 };
 
@@ -49,7 +64,7 @@ type EventBase<T extends string, P> = {
 };
 
 export type UserMessage = EventBase<'user.message', { text: string; attachments?: unknown[] }>;
-export type TurnStarted = EventBase<'turn.started', { turn_id: string; provider: Provider }>;
+export type TurnStarted = EventBase<'turn.started', { turn_id: string; provider: Provider; wake_reason?: string | null; retry_of?: string | null }>;
 export type AssistantText = EventBase<'assistant.text', { text: string }>;
 export type ToolStarted = EventBase<
   'tool.started',
@@ -88,9 +103,12 @@ export type JobStateEv = EventBase<'job.state', { job_id: string; state: string;
 export type WaitEv = EventBase<'wait.created' | 'wait.fired', { wait_id: string; kind: string; predicate: string }>;
 export type ProviderStatus = EventBase<
   'provider.status',
-  { provider: Provider; status: 'rate_limited' | 'retrying' | 'error'; resets_at?: string | number; message?: string }
+  { provider: Provider; status: 'rate_limited' | 'retrying' | 'error' | 'blocked'; resets_at?: string | number; message?: string }
 >;
+export type ProviderSwitched = EventBase<'provider.switched', { from: Provider; to: Provider; history_items: number }>;
 export type SystemNotice = EventBase<'system.notice', { text: string }>;
+export type ListenReady = EventBase<'listen.ready', { listen_id: string; title: string; items: number; systems: number }>;
+export type ListenRated = EventBase<'listen.rated', { listen_id: string; title: string; summary: string; rated_items: number }>;
 export type UnknownEvent = EventBase<string, Record<string, unknown>>;
 
 export type BrainEvent =
@@ -107,6 +125,9 @@ export type BrainEvent =
   | JobStateEv
   | WaitEv
   | ProviderStatus
+  | ProviderSwitched
+  | ListenReady
+  | ListenRated
   | SystemNotice;
 
 export type DecisionSummary = {
@@ -131,11 +152,16 @@ export type Approval = {
 export type Job = {
   job_id: string;
   thread_id: string | null;
-  name: string;
+  name: string; // the SLURM job name (brain.<thread8>.<run8>), for sacct
+  label?: string; // what it is: the script name
+  thread_title?: string | null;
   state: string;
   gpus: number | null;
   elapsed: string | number | null;
   time_limit: string | null;
+  exit_code?: number | null;
+  submitted_at?: number;
+  updated_at?: number;
 };
 
 export type Wait = { wait_id?: string; kind?: string; predicate?: string; thread_id?: string; [k: string]: unknown };
@@ -147,18 +173,56 @@ export type Since = {
   summary?: string;
   jobs_finished?: number;
   jobs_failed?: number;
-  files_changed?: number;
+  edits?: number;
   turns?: number;
   [k: string]: unknown;
 };
+
+export type ListeningSummary = { id: string; thread_id: string; title: string; n_items: number; n_systems: number; created_at: number };
 
 export type Pending = {
   approvals: Approval[];
   waits: Wait[];
   jobs: Job[];
   threads_needing_you: Thread[];
+  listening?: ListeningSummary[];
   since: Since;
 };
+
+/** GET /v1/listening/{id}: a blind listening test (see runtime/brain/listening.py for listen.json). */
+export type ListenItem = {
+  id: string;
+  text: string;
+  samples: Record<string, string>;
+  reference: string | null;
+  prompt: string | null;
+  metrics: Record<string, Record<string, number | string>>;
+};
+export type ItemRating = { scores?: Record<string, number>; best?: string | null; note?: string };
+export type ListenResult = {
+  rated_items: number;
+  total_items: number;
+  ties: number;
+  ranking: string[];
+  text: string;
+  notes: string[];
+  systems: Record<string, { label: string; mos: number | null; mos_ci95: number | null; n_scores: number; best: number }>;
+};
+export type ListeningTest = {
+  id: string;
+  thread_id: string;
+  title: string;
+  description: string;
+  state: 'pending' | 'rated';
+  systems: { id: string; label: string }[];
+  items: ListenItem[];
+  metrics: Record<string, Record<string, number | string>>;
+  ratings: Record<string, ItemRating> | null;
+  summary: ListenResult | null;
+};
+
+export type FileEntry = { name: string; dir: boolean; size: number; mtime: number };
+export type FileListing = { root: string; path: string; abs: string; entries: FileEntry[]; roots: string[] };
 
 export type Health = { ok: boolean; brain_pub: string; version: string; rung: string; paused: boolean };
 
@@ -174,6 +238,7 @@ export type PushData = {
   kind: 'approval' | 'failed' | 'done' | 'budget' | 'changed' | 'transport';
   thread_id?: string;
   approval_id?: string;
+  listen_id?: string;
   job_id?: string;
   endpoint?: string;
   endpoint_sig?: string;

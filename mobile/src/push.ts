@@ -102,6 +102,7 @@ async function handleTransport(d: PushData): Promise<void> {
 export function routeForPush(d: PushData | null): string | null {
   if (!d) return null;
   if (d.approval_id) return `/approval/${encodeURIComponent(d.approval_id)}`;
+  if (d.listen_id) return `/listen/${encodeURIComponent(d.listen_id)}`;
   if (d.thread_id) return `/thread/${encodeURIComponent(d.thread_id)}`;
   if (d.job_id) return '/runs';
   return '/';

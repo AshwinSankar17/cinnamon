@@ -19,7 +19,7 @@
  * the keypair is derived from it on load. It never leaves the device.
  */
 import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
+import { getSecret, setSecret } from './secure';
 import nacl from 'tweetnacl';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
@@ -32,10 +32,6 @@ nacl.setPRNG((x: Uint8Array, n: number) => {
 });
 
 const SEED_KEY = 'cb.device_seed.v1';
-const SECURE_OPTS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
-};
-
 export type DeviceKeys = { publicKey: Uint8Array; secretKey: Uint8Array };
 
 let cached: DeviceKeys | null = null;
@@ -43,10 +39,10 @@ let cached: DeviceKeys | null = null;
 /** Returns the device Ed25519 keypair, generating and persisting it on first call. */
 export async function getDeviceKeys(): Promise<DeviceKeys> {
   if (cached) return cached;
-  let seedB64 = await SecureStore.getItemAsync(SEED_KEY, SECURE_OPTS);
+  let seedB64 = await getSecret(SEED_KEY);
   if (!seedB64) {
     seedB64 = b64urlEncode(Crypto.getRandomBytes(32));
-    await SecureStore.setItemAsync(SEED_KEY, seedB64, SECURE_OPTS);
+    await setSecret(SEED_KEY, seedB64);
   }
   const kp = nacl.sign.keyPair.fromSeed(b64urlDecode(seedB64));
   cached = { publicKey: kp.publicKey, secretKey: kp.secretKey };
@@ -91,6 +87,7 @@ export type PairingPayload = {
   code: string;
   secret: string; // b64url, 32 bytes
   exp: number; // unix seconds
+  alt?: string[]; // failover relay URLs (not part of the pairing transcript)
 };
 
 /** transcript = sha256("cb-pair-v1" ‖ brain_pub ‖ device_pub ‖ endpoint ‖ nonce_device) */
@@ -212,5 +209,8 @@ export function parsePairingPayload(raw: string): PairingPayload {
     if (typeof p[k] !== 'string' || !p[k]) throw new Error(`Pairing payload is missing ${k}.`);
   }
   if (typeof p.exp !== 'number') throw new Error('Pairing payload is missing exp.');
+  if (p.alt !== undefined && !(Array.isArray(p.alt) && p.alt.every((x) => typeof x === 'string'))) {
+    throw new Error('Pairing payload has a malformed alt list.');
+  }
   return p as PairingPayload;
 }

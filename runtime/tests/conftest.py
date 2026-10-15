@@ -40,6 +40,7 @@ def brain(tmp_path: Path, git_repo: Path, monkeypatch) -> Brain:
     s.save(p)
     db = DB(connect(p.db))
     b = Brain(p, s, db, providers={"fake": FakeProvider()}, redactor=SecretRegistry(["wandb-secret-0123456789"]))
+    b.settings.raw["quiet_hours_enabled"] = False  # tests must not depend on the wall clock; quiet tests opt in
     b.watcher.squeue_interval = 0
     b.watcher.sentinel_interval = 0
     return b

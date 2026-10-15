@@ -14,12 +14,13 @@ import asyncio
 import json
 import os
 import shutil
-import signal
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
-from .base import TurnContext, TurnResult
+from .. import transcript
+from .base import TurnContext, TurnResult, kill_group, stop_process
 
 READ_TOOLS = {"Read", "Glob", "Grep", "LS", "WebFetch", "WebSearch"}
 EDIT_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
@@ -60,20 +61,69 @@ def _tool_result_text(content: Any) -> str:
 
 class ClaudeProvider:
     name = "claude"
+    supports_defer = True
 
     def __init__(self, binary: str | None = None):
         self.binary = binary or os.environ.get("BRAIN_CLAUDE_BIN") or shutil.which("claude") or "claude"
         self._procs: dict[str, asyncio.subprocess.Process] = {}
+        self._version: str | None = None
+
+    # ---- transcript ------------------------------------------------------------------------------
+    def _session_file(self, ctx: TurnContext, sid: str) -> Path | None:
+        root = Path(ctx.env.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+        return next(root.glob(f"*/{sid}.jsonl"), None)
+
+    def native_items(self, ctx: TurnContext, session_id: str) -> list[dict] | None:
+        f = self._session_file(ctx, session_id)
+        return transcript.read_claude(f)[0] if f else None
+
+    async def _run_quiet(self, ctx: TurnContext, *args: str) -> str:
+        p = await asyncio.create_subprocess_exec(self.binary, *args, cwd=str(ctx.cwd), env={**os.environ, **ctx.env},
+                                                 stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
+                                                 stderr=asyncio.subprocess.PIPE)
+        out, err = await p.communicate()
+        if p.returncode:
+            raise RuntimeError(f"claude {args[0]} failed: {err.decode(errors='replace')[-500:]}")
+        return out.decode(errors="replace")
+
+    async def hydrate(self, ctx: TurnContext, items: list[dict]) -> str:
+        """Append foreign history to this thread's Claude session (seeding one first) so --resume carries it."""
+        sid = ctx.resume_session
+        if not sid or not self._session_file(ctx, sid):
+            # ponytail: a one-line seed turn costs a tiny request; writing a session from scratch is unverified
+            sid = json.loads(await self._run_quiet(ctx, "-p", "Reply with exactly: ready", "--output-format", "json"))["session_id"]
+        if self._version is None:
+            self._version = (await self._run_quiet(ctx, "--version")).split()[0]
+        f = self._session_file(ctx, sid)
+        if not f:
+            raise RuntimeError(f"Claude session {sid} has no transcript file")
+        transcript.write_claude(f, items, self._version)
+        return sid
+
+    @staticmethod
+    async def _write(proc: asyncio.subprocess.Process, text: str) -> None:
+        assert proc.stdin
+        proc.stdin.write((json.dumps({"type": "user", "message": {"role": "user", "content": text}}) + "\n").encode())
+        await proc.stdin.drain()
+
+    async def steer(self, thread_id: str, text: str) -> bool:
+        """Claude Code's own mid-turn behaviour: a message sent while it works is read at its next step."""
+        p = self._procs.get(thread_id)
+        if not p or p.returncode is not None or not p.stdin or p.stdin.is_closing():
+            return False
+        try:
+            await self._write(p, text)
+        except (BrokenPipeError, ConnectionResetError):
+            return False
+        return True
 
     async def interrupt(self, thread_id: str) -> None:
-        p = self._procs.get(thread_id)
-        if p and p.returncode is None:
-            p.send_signal(signal.SIGINT)  # SIGINT records the turn; SIGTERM would leave it unfinished
+        await stop_process(self._procs.get(thread_id))  # SIGINT records the turn; escalates only if ignored
 
     def _cmd(self, ctx: TurnContext) -> list[str]:
         cmd = [self.binary, "-p"]
-        if ctx.prompt is not None:
-            cmd.append(ctx.prompt)
+        if ctx.prompt is not None:  # the prompt goes in on stdin, which stays open so the owner can steer the turn
+            cmd += ["--input-format", "stream-json"]
         cmd += ["--output-format", "stream-json", "--verbose",
                 "--permission-mode", ctx.permission_mode,
                 "--settings", json.dumps(hook_settings())]
@@ -85,12 +135,16 @@ class ClaudeProvider:
 
     async def run_turn(self, ctx: TurnContext) -> TurnResult:
         env = {**os.environ, **ctx.env, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN": "1"}
+        streaming = ctx.prompt is not None
         proc = await asyncio.create_subprocess_exec(
             *self._cmd(ctx), cwd=str(ctx.cwd), env=env,
-            stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            limit=16 * 1024 * 1024,
+            stdin=asyncio.subprocess.PIPE if streaming else asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            limit=16 * 1024 * 1024, start_new_session=True,
         )
         self._procs[ctx.thread_id] = proc
+        if streaming:
+            await self._write(proc, ctx.prompt)
         res = TurnResult()
         tools: dict[str, str] = {}
         try:
@@ -104,12 +158,17 @@ class ClaudeProvider:
                 except json.JSONDecodeError:
                     continue
                 self._map(msg, ctx, res, tools)
+                if msg.get("type") == "result" and proc.stdin and not proc.stdin.is_closing():
+                    # turn over: no more steering. A message written just before this still runs (as its own
+                    # turn in this process) and its events keep streaming until EOF.
+                    proc.stdin.close()
             await proc.wait()
             if proc.returncode not in (0, None) and not res.stop_reason:
                 err = (await proc.stderr.read()).decode("utf-8", "replace")[-2000:] if proc.stderr else ""
                 res.error = err or f"claude exited {proc.returncode}"
         finally:
             self._procs.pop(ctx.thread_id, None)
+            kill_group(proc)  # the turn was cancelled mid-stream: leave nothing running
         return res
 
     def _map(self, msg: dict, ctx: TurnContext, res: TurnResult, tools: dict[str, str]) -> None:

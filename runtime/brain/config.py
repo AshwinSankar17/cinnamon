@@ -70,12 +70,24 @@ class Paths:
         return self.root / "claude"
 
     @property
+    def codex_home(self) -> Path:
+        return self.root / "codex"
+
+    @property
     def fcm_key(self) -> Path:
         return self.root / "fcm-service-account.json"
 
     @property
     def disabled_flag(self) -> Path:
         return self.root / "DISABLED"
+
+    @property
+    def admin_token(self) -> Path:
+        return self.root / "admin.token"
+
+    @property
+    def vapid_key(self) -> Path:
+        return self.root / "vapid.pem"
 
     @property
     def push_outbox(self) -> Path:
@@ -93,7 +105,7 @@ def ensure_root(p: Paths | None = None) -> Paths:
     """Create BRAIN_ROOT and its subdirectories with owner-only permissions."""
     p = p or paths()
     os.umask(0o077)
-    for d in (p.root, p.audit_dir, p.ir_dir, p.blobs, p.claude_config_dir):
+    for d in (p.root, p.audit_dir, p.ir_dir, p.blobs, p.claude_config_dir, p.codex_home):
         d.mkdir(parents=True, exist_ok=True)
         os.chmod(d, 0o700)
     return p
@@ -116,8 +128,8 @@ def check_permissions(p: Paths, fix: bool = False) -> list[str]:
         mode = stat.S_IMODE(path.stat().st_mode)
         return bool(mode & ~max_mode)
 
-    checks: list[tuple[Path, int]] = [(p.root, 0o700), (p.claude_config_dir, 0o700)]
-    for f in (p.identity_key, p.token_secret, p.hook_token, p.fcm_key, p.db):
+    checks: list[tuple[Path, int]] = [(p.root, 0o700), (p.claude_config_dir, 0o700), (p.codex_home, 0o700)]
+    for f in (p.identity_key, p.token_secret, p.hook_token, p.admin_token, p.fcm_key, p.vapid_key, p.db):
         checks.append((f, 0o600))
     home = Path.home()
     for f in (home / ".netrc", home / ".claude" / ".credentials.json", home / ".codex" / "auth.json",
@@ -142,7 +154,6 @@ class RepoConfig:
     worktree_root: str = ""
     vault_root: str = ""
     profile: str = "auto"  # auto | student
-    archive_policy: str = "full"
     protected_branches: list[str] = field(default_factory=lambda: ["main", "master"])
 
 
@@ -151,8 +162,6 @@ class Settings:
     repos: list[RepoConfig] = field(default_factory=list)
     default_provider: str = "claude"
     quiet_hours: tuple[str, str] = ("23:00", "07:00")
-    max_hot_providers: int = 4
-    idle_exit_seconds: int = 300
     fcm_project_id: str = ""
     endpoint: str = ""  # current public endpoint (relay); used in pairing payloads
     raw: dict[str, Any] = field(default_factory=dict)
@@ -162,14 +171,13 @@ class Settings:
         if not p.settings.exists():
             return cls()
         data = yaml.safe_load(p.settings.read_text()) or {}
-        repos = [RepoConfig(**r) for r in data.get("repos", [])]
+        known = RepoConfig.__dataclass_fields__
+        repos = [RepoConfig(**{k: v for k, v in r.items() if k in known}) for r in data.get("repos", [])]
         qh = data.get("quiet_hours", ["23:00", "07:00"])
         return cls(
             repos=repos,
             default_provider=data.get("default_provider", "claude"),
             quiet_hours=(qh[0], qh[1]),
-            max_hot_providers=int(data.get("max_hot_providers", 4)),
-            idle_exit_seconds=int(data.get("idle_exit_seconds", 300)),
             fcm_project_id=data.get("fcm_project_id", ""),
             endpoint=data.get("endpoint", ""),
             raw=data,
@@ -177,12 +185,12 @@ class Settings:
 
     def save(self, p: Paths) -> None:
         data = dict(self.raw)
+        for dead in ("max_hot_providers", "idle_exit_seconds"):
+            data.pop(dead, None)
         data.update(
             repos=[r.__dict__ for r in self.repos],
             default_provider=self.default_provider,
             quiet_hours=list(self.quiet_hours),
-            max_hot_providers=self.max_hot_providers,
-            idle_exit_seconds=self.idle_exit_seconds,
             fcm_project_id=self.fcm_project_id,
             endpoint=self.endpoint,
         )

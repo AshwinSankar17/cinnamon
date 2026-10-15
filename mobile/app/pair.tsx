@@ -5,8 +5,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
 import { Icon } from '@/components/Icon';
 import { Badge, Button, Card, Chip, Dot, Mono, SectionLabel, TabHeader } from '@/components/ui';
-import { completePairing, describeError, forgetPairing, getPairing, health, clusterLabel } from '@/src/api';
+import { clusterLabel, completePairing, describeError, forgetPairing, getAccessToken, getPairing, health, PendingApprovalError } from '@/src/api';
 import { b64urlDecode } from '@/src/b64';
+import { webDeviceName } from '@/src/format';
 import { useConnection } from '@/src/connection';
 import { fingerprint, fullFingerprint, parsePairingPayload, type PairingPayload } from '@/src/crypto';
 import { registerForPush, type PushSetup } from '@/src/push';
@@ -25,6 +26,7 @@ export default function PairScreen() {
   const conn = useConnection();
   const existing = conn.paired ? getPairing() : null;
   const [mode, setMode] = useState<Mode>('scan');
+  const [waiting, setWaiting] = useState(false); // paired, but waiting for an existing device to approve
   const [payload, setPayload] = useState<PairingPayload | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
@@ -48,12 +50,20 @@ export default function PairScreen() {
     if (!payload) return;
     setTest({ kind: 'running' });
     try {
+      if (waiting) {
+        // already paired, waiting for approval: only retry the session, the code is single-use
+        await getAccessToken(true);
+        const h = await health();
+        setWaiting(false);
+        setTest({ kind: 'ok', detail: `approved · Brain ${h.version} · rung ${h.rung}${h.paused ? ' · paused' : ''}` });
+        return;
+      }
       if (existing) {
         brainSocket.stop();
         await forgetPairing();
         await wipeLocal();
       }
-      const name = Device.deviceName ?? Device.modelName ?? 'phone';
+      const name = Device.deviceName ?? Device.modelName ?? (Platform.OS === 'web' ? webDeviceName(navigator.userAgent, navigator.maxTouchPoints) : 'phone');
       const r = await completePairing(payload, name);
       const h = await health();
       setTest({
@@ -61,6 +71,7 @@ export default function PairScreen() {
         detail: `device ${r.deviceId} · Brain ${h.version} · rung ${h.rung}${h.paused ? ' · paused' : ''}`,
       });
     } catch (e) {
+      if (e instanceof PendingApprovalError) setWaiting(true);
       setTest({ kind: 'fail', detail: describeError(e) });
     }
   };
@@ -164,7 +175,7 @@ export default function PairScreen() {
                     </View>
                     <Text style={[type.small, { color: colors.failed, flex: 1 }]}>{test.detail}</Text>
                   </View>
-                  <Button label="Try again" onPress={pair} />
+                  <Button label={waiting ? 'I approved it, continue' : 'Try again'} onPress={pair} />
                 </>
               ) : null}
             </Step>

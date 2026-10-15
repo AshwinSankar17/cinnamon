@@ -11,7 +11,7 @@
  * - Tokens: a fresh access token is fetched (refresh / handshake via api.ts) before every connect.
  */
 import { AppState, type AppStateStatus } from 'react-native';
-import { getAccessToken, getPairing } from './api';
+import { getAccessToken, getActiveEndpoint, getPairing, health } from './api';
 import { setConnection } from './connection';
 import { upsertEvents } from './store';
 import type { BrainEvent } from './types';
@@ -108,13 +108,15 @@ class BrainSocket {
     setConnection({ ws: 'connecting' });
     let token: string;
     try {
+      if (this.attempt > 0) await health(); // a reconnect: let REST fail over to a relay that answers first
       token = await getAccessToken();
     } catch {
       this.scheduleReconnect();
       return;
     }
     if (!this.wanted || this.appState !== 'active') return;
-    const url = `${p.endpoint.replace(/\/+$/, '').replace(/^http/i, 'ws')}/v1/ws?token=${encodeURIComponent(token)}`;
+    const base = getActiveEndpoint() ?? p.endpoint;
+    const url = `${base.replace(/\/+$/, '').replace(/^http/i, 'ws')}/v1/ws?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(url);
     this.ws = ws;
 

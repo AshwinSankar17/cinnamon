@@ -1,12 +1,12 @@
 /** Bottom sheet with thread actions (E-ThreadActions): pin, mute, fork, archive. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, describeError } from '@/src/api';
 import { upsertThreads } from '@/src/store';
-import { colors, fonts, providerShort, type } from '@/src/theme';
-import type { Thread } from '@/src/types';
+import { colors, fonts, providerName, providerShort, type } from '@/src/theme';
+import type { ProviderInfo, Thread } from '@/src/types';
 import { Icon, type IconName } from './Icon';
 import { Button, Mono } from './ui';
 
@@ -21,6 +21,11 @@ type Props = {
 export function ThreadActionsSheet({ thread, onClose, onChanged, forkAtSeq }: Props) {
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
+  useEffect(() => {
+    if (picking && !providers) api.providers().then(setProviders).catch((e) => Alert.alert('Could not load models', describeError(e)));
+  }, [picking, providers]);
   if (!thread) return null;
 
   const run = async (key: string, fn: () => Promise<Thread>, after?: (t: Thread) => void) => {
@@ -38,7 +43,30 @@ export function ThreadActionsSheet({ thread, onClose, onChanged, forkAtSeq }: Pr
     }
   };
 
-  const actions: { key: string; label: string; icon: IconName; danger?: boolean; onPress: () => void }[] = [
+  const switching = (providers ?? []).filter((p) => p.name !== thread.provider && p.name !== 'fake');
+  const actions: { key: string; label: string; icon: IconName; danger?: boolean; onPress: () => void }[] = picking
+    ? switching.map((p) => ({
+        key: `to-${p.name}`,
+        label: `${providerName[p.name] ?? p.name}${p.native_handoff ? '' : ' · history replayed in the prompt'}`,
+        icon: 'refresh' as IconName,
+        onPress: () => run(`to-${p.name}`, () => api.switchProvider(thread.id, p.name)),
+      }))
+    : [
+    {
+      key: 'model',
+      label: `Switch model (now ${providerName[thread.provider] ?? thread.provider})`,
+      icon: 'refresh',
+      onPress: () => setPicking(true),
+    },
+    {
+      key: 'files',
+      label: thread.vault_dir ? 'Browse files & run vault' : 'Browse files',
+      icon: 'repos',
+      onPress: () => {
+        onClose();
+        router.push(`/files/${encodeURIComponent(thread.id)}${thread.vault_dir ? '?root=run' : ''}`);
+      },
+    },
     {
       key: 'pin',
       label: thread.pinned ? 'Unpin' : 'Pin to top',
@@ -139,7 +167,10 @@ export function ThreadActionsSheet({ thread, onClose, onChanged, forkAtSeq }: Pr
               </Pressable>
             ))}
           </View>
-          <Button label="Cancel" onPress={onClose} />
+          {picking ? (
+            <Mono>The full thread history carries over. Switching waits until the current turn and any pending approval are done.</Mono>
+          ) : null}
+          <Button label={picking ? 'Back' : 'Cancel'} onPress={picking ? () => setPicking(false) : onClose} />
         </View>
       </View>
     </Modal>
