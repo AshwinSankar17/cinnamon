@@ -221,6 +221,7 @@ MIGRATIONS = [
     ("turns", "prompt", "TEXT"),                                          # what the turn was asked, for Retry
     ("turns", "wake_reason", "TEXT"),
     ("threads", "imported_from", "TEXT"),                                 # "<provider>:<session id>" of an imported terminal session
+    ("threads", "seen_at", "REAL"),                                       # when the owner last opened it (read marker)
 ]
 
 

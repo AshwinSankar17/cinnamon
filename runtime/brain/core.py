@@ -116,6 +116,7 @@ class Brain:
             providers = {"claude": ClaudeProvider(), "codex": CodexProvider(), "agy": AgyProvider(),
                          "fake": FakeProvider()}
         self.providers = providers
+        self.backfill_seen()
         self.watcher = slurm.Watcher()
         self._tasks: dict[str, asyncio.Task] = {}
         self._turn_counts: dict[str, dict[str, int]] = {}
@@ -149,12 +150,47 @@ class Brain:
     def thread(self, thread_id: str) -> dict | None:
         return row_dict(self.db.one("SELECT * FROM threads WHERE id=?", (thread_id,)))
 
-    def thread_view(self, t: dict) -> dict:
+    # A thread's state is derived from what is true now (a turn running, an approval or a listening test pending, the
+    # last turn failed, an open wait or active job, Brain paused), never read back from threads.state: that column is
+    # only written at turn boundaries and went stale (a lifted pause, a test registered between turns).
+    def _facts(self) -> dict[str, set[str]]:
+        ids = lambda sql, *a: {r[0] for r in self.db.q(sql, a)}  # noqa: E731
+        last: dict[str, str | None] = {}
+        for r in self.db.q("SELECT thread_id, stop_reason FROM turns WHERE ended_at IS NOT NULL ORDER BY started_at"):
+            last[r["thread_id"]] = r["stop_reason"]
+        return {
+            "running": {tid for tid, task in self._tasks.items() if not task.done()},
+            "approval": ids("SELECT thread_id FROM approvals WHERE state='pending'"),
+            "listen": ids("SELECT thread_id FROM listening_tests WHERE state='pending'"),
+            "failed_turn": {tid for tid, stop in last.items() if stop == "error"},
+            "wait": ids("SELECT thread_id FROM waits WHERE state='open' AND kind!='approval'")
+                    | ids("SELECT thread_id FROM jobs WHERE thread_id IS NOT NULL AND state NOT IN (%s)"
+                          % ",".join("?" * len(slurm.TERMINAL)), *slurm.TERMINAL),
+        }
+
+    def state_of(self, tid: str, f: dict[str, set[str]] | None = None) -> str:
+        f = f or self._facts()
+        if tid in f["running"]:
+            return "running"
+        if tid in f["approval"] or tid in f["listen"] or (tid in f["failed_turn"] and tid not in f["wait"]):
+            return "needs_you"  # a failed turn behind a usage-limit wait resumes by itself: that is waiting
+        if tid in f["wait"]:
+            return "waiting"
+        return "paused" if self.paused else "idle"
+
+    def _last_reply(self, tid: str) -> dict | None:
+        """The agent's latest finished turn: what "news" means (the owner's own messages and Brain's notices are not)."""
+        return self.db.one("SELECT ts, payload FROM events WHERE thread_id=? AND type='turn.ended' ORDER BY seq DESC LIMIT 1",
+                           (tid,))
+
+    def thread_view(self, t: dict, f: dict[str, set[str]] | None = None) -> dict:
         last = self.db.one("SELECT * FROM events WHERE thread_id=? AND visibility='user' ORDER BY seq DESC LIMIT 1",
                            (t["id"],))
-        out = {k: t[k] for k in ("id", "repo_id", "title", "mode", "branch", "provider", "state", "parent_id",
-                                 "fork_turn", "last_seq", "updated_at", "vault_dir")}
-        out.update(pinned=bool(t["pinned"]), archived=bool(t["archived"]), muted=bool(t["muted"]),
+        out = {k: t[k] for k in ("id", "repo_id", "title", "mode", "branch", "provider", "parent_id",
+                                 "fork_turn", "last_seq", "updated_at", "vault_dir", "seen_at")}
+        reply = self._last_reply(t["id"])
+        out.update(state=self.state_of(t["id"], f), pinned=bool(t["pinned"]), archived=bool(t["archived"]),
+                   muted=bool(t["muted"]), unseen=bool(reply and reply["ts"] > (t["seen_at"] or 0)),
                    last_event=EventStore._row_to_event(last) if last else None)
         return out
 
@@ -164,11 +200,22 @@ class Brain:
         if repo_id:
             sql += " AND repo_id=?"
             args.append(repo_id)
-        if state:
-            sql += " AND state=?"
-            args.append(state)
         sql += " ORDER BY pinned DESC, updated_at DESC"
-        return [self.thread_view(dict(r)) for r in self.db.q(sql, args)]
+        f = self._facts()
+        views = [self.thread_view(dict(r), f) for r in self.db.q(sql, args)]
+        return [v for v in views if not state or v["state"] == state]
+
+    def mark_seen(self, thread_id: str) -> float:
+        """The owner opened the thread: its news and failures so far are read (one owner, so one marker for all devices)."""
+        if not self.thread(thread_id):
+            raise KeyError(thread_id)
+        at = now()
+        self.db.x("UPDATE threads SET seen_at=? WHERE id=?", (at, thread_id))
+        return at
+
+    def backfill_seen(self) -> None:
+        """Threads from before read markers start out read, so the first start does not flood the owner with news."""
+        self.db.x("UPDATE threads SET seen_at=? WHERE seen_at IS NULL", (now(),))
 
     def _set_state(self, thread_id: str, state: str) -> None:
         self.db.x("UPDATE threads SET state=?, updated_at=? WHERE id=?", (state, now(), thread_id))
@@ -200,8 +247,8 @@ class Brain:
             vault_dir = str(vd)
         self.db.x(
             "INSERT INTO threads(id, repo_id, title, mode, branch, worktree, provider, state, parent_id, fork_turn,"
-            " created_at, updated_at, vault_dir) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (tid, repo_id, title, mode, branch, worktree, provider, "idle", parent_id, fork_turn, now(), now(), vault_dir),
+            " created_at, updated_at, vault_dir, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (tid, repo_id, title, mode, branch, worktree, provider, "idle", parent_id, fork_turn, now(), now(), vault_dir, now()),
         )
         where = "read-only" if mode == "readonly" else branch
         self.events.append(tid, "system.notice", {"text": f"Thread created on {repo.name or repo.id} ({where})."
@@ -1032,7 +1079,9 @@ class Brain:
         waits = [dict(r) | {"predicate": json.loads(r["predicate"])} for r in
                  self.db.q("SELECT * FROM waits WHERE state='open' AND kind!='approval'")]
         jobs = [j for j in self.jobs(50) if j["state"] not in slurm.TERMINAL]
-        need = [self.thread_view(dict(r)) for r in self.db.q("SELECT * FROM threads WHERE state='needs_you' AND archived=0")]
+        f = self._facts()
+        live = [dict(r) for r in self.db.q("SELECT * FROM threads WHERE archived=0")]
+        need = [v for v in (self.thread_view(t, f) for t in live) if v["state"] == "needs_you"]
         listen = [dict(r) for r in self.db.q("SELECT id, thread_id, title, n_items, n_systems, created_at FROM listening_tests"
                                              " WHERE state='pending' ORDER BY created_at")]
         since = now() - 12 * 3600 if since is None else min(max(float(since), now() - 7 * 86400), now())
@@ -1040,8 +1089,78 @@ class Brain:
         failed = self.db.one("SELECT COUNT(*) AS n FROM jobs WHERE state IN ('FAILED','TIMEOUT','OUT_OF_MEMORY','NODE_FAIL') AND updated_at>?", (since,))["n"]
         turns = self.db.one("SELECT COUNT(*) AS n, COALESCE(SUM(edits),0) AS e FROM turns WHERE ended_at>?", (since,))
         return {"approvals": approvals, "waits": waits, "jobs": jobs, "threads_needing_you": need, "listening": listen,
+                "attention": self.attention(f, live),
                 "since": {"ts": since, "jobs_finished": fin, "jobs_failed": failed, "turns": turns["n"],
                           "edits": turns["e"], "paused": self.paused}}
+
+    NEWS_DAYS = 7  # unread news and failures older than this have stopped being news
+
+    def attention(self, f: dict[str, set[str]] | None = None, live: list[dict] | None = None) -> list[dict]:
+        """Everything that wants the owner, ranked by what blocks their agents: 1 an approval, 2 a failed turn, 3 jobs
+        that failed since they last opened the thread, 4 a listening test, 5 a reply they have not read. Every client
+        (home, inbox, threads, the companion) reads this one list, so they cannot disagree."""
+        f = f or self._facts()
+        live = live if live is not None else [dict(r) for r in self.db.q("SELECT * FROM threads WHERE archived=0")]
+        th = {t["id"]: t for t in live}
+        title = lambda tid: th[tid]["title"] if tid in th else (self.thread(tid) or {}).get("title") or "A thread"  # noqa: E731
+        items: list[dict] = []
+        listed: set[str] = set()
+
+        def add(tier: int, kind: str, key: str, tid: str, target: str, title_: str, detail: str, at: float) -> None:
+            items.append({"key": key, "tier": tier, "kind": kind, "thread_id": tid, "target": target, "title": title_,
+                          "detail": detail, "at": at})
+            listed.add(tid)
+
+        for a in (self.approval(r["id"]) for r in self.db.q("SELECT id FROM approvals WHERE state='pending' ORDER BY created_at")):
+            device = a["thread_id"] == self.DEVICES
+            add(1, "approval", f"approval:{a['id']}", a["thread_id"], a["id"], a["decision_summary"].get("verb") or a["summary"],
+                "A new device wants to pair" if device else title(a["thread_id"]), a["created_at"])
+        for tid in sorted(f["failed_turn"] - f["wait"] - f["running"] - listed, key=lambda x: -th.get(x, {}).get("updated_at", 0)):
+            if tid not in th:
+                continue
+            turn = self.db.one("SELECT turn_id, ended_at FROM turns WHERE thread_id=? ORDER BY started_at DESC LIMIT 1", (tid,))
+            add(2, "needs", f"needs:{tid}:{turn['turn_id']}", tid, tid, f"{th[tid]['title']}: turn failed",
+                "Retry it or reply in the thread", turn["ended_at"])
+        cutoff = now() - self.NEWS_DAYS * 86400
+        groups: dict[str, list[dict]] = {}
+        for j in self.db.q("SELECT j.* FROM jobs j JOIN threads t ON t.id=j.thread_id WHERE t.archived=0 AND t.muted=0"
+                           " AND j.state IN ('FAILED','TIMEOUT','OUT_OF_MEMORY','NODE_FAIL') AND j.updated_at > MAX(COALESCE(t.seen_at, 0), ?)"
+                           " ORDER BY j.updated_at DESC", (cutoff,)):
+            groups.setdefault(j["thread_id"], []).append(dict(j))
+        why = {"OUT_OF_MEMORY": "out of memory", "TIMEOUT": "hit its time limit", "NODE_FAIL": "node failure"}
+        for tid, g in groups.items():
+            if tid in listed:
+                continue
+            j = g[0]
+            reason = why.get(j["state"]) or (f"exit {j['exit_code']}" if j["exit_code"] is not None else "failed")
+            add(3, "failed", f"failed:{tid}:{j['job_id']}", tid, tid,
+                f"{j['label'] or j['name']} failed" if len(g) == 1 else f"{len(g)} jobs failed in {th[tid]['title']}",
+                f"{th[tid]['title']} · {reason}" if len(g) == 1 else f"Latest: {reason}", j["updated_at"])
+        for l in self.db.q("SELECT * FROM listening_tests WHERE state='pending' ORDER BY created_at DESC"):
+            add(4, "listen", f"listen:{l['id']}", l["thread_id"], l["id"], f"Listen: {l['title']}",
+                f"{l['n_items']} {'sentence' if l['n_items'] == 1 else 'sentences'}, blind · {title(l['thread_id'])}", l["created_at"])
+        news = []
+        for t in live:
+            if t["id"] in listed or t["id"] in f["running"] or t["muted"]:
+                continue
+            r = self._last_reply(t["id"])
+            if r and r["ts"] > max(t["seen_at"] or 0, cutoff):
+                text = json.loads(r["payload"]).get("text") or ""
+                first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "Replied since you last looked")
+                news.append((r["ts"], t, first[:160]))
+        for ts, t, first in sorted(news, key=lambda x: -x[0]):
+            add(5, "news", f"news:{t['id']}:{t['last_seq']}", t["id"], t["id"], f"{t['title']} replied", first, ts)
+        return items
+
+    def skip_listening(self, lid: str) -> None:
+        """The owner will not rate this test (usually superseded by a newer one). Kept, marked skipped; no longer pending."""
+        r = self.listening_row(lid)
+        if not r:
+            raise KeyError(lid)
+        if r["state"] == "pending":
+            self.db.x("UPDATE listening_tests SET state='skipped' WHERE id=?", (lid,))
+            self.events.append(r["thread_id"], "listen.skipped", {"listen_id": lid, "title": r["title"]},
+                               actor={"kind": "user"})
 
     def _notify(self, thread_id: str, kind: str, title: str, body: str, data: dict) -> None:
         title, body = self.redactor.redact(title)[0], self.redactor.redact(body)[0]  # pushes leave the cluster in clear

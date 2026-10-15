@@ -283,6 +283,13 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             raise HTTPException(404, "no such thread")
         return brain.thread_view(t)
 
+    @app.post("/v1/threads/{tid}/seen")
+    def thread_seen(tid: str, device: str = Depends(auth)) -> dict:
+        try:
+            return {"seen_at": brain.mark_seen(tid)}
+        except KeyError:
+            raise HTTPException(404, "no such thread")
+
     @app.patch("/v1/threads/{tid}")
     def patch_thread(tid: str, b: PatchThread, device: str = Depends(auth)) -> dict:
         if not brain.thread(tid):
@@ -345,6 +352,14 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             return await brain.rate_listening(lid, b.ratings, device)
         except KeyError:
             raise HTTPException(404, "no such listening test")
+
+    @app.post("/v1/listening/{lid}/skip")
+    def listening_skip(lid: str, device: str = Depends(auth)) -> dict:
+        try:
+            brain.skip_listening(lid)
+        except KeyError:
+            raise HTTPException(404, "no such listening test")
+        return {"ok": True}
 
     @app.get("/v1/threads/{tid}/files")
     def thread_files(tid: str, root: str = "worktree", path: str = "", device: str = Depends(auth)) -> dict:
@@ -648,6 +663,18 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
                     q = brain.events.subscribe(tid)
                     subs[tid] = q
                     pumps[tid] = asyncio.create_task(pump(tid, q, int(msg.get("after_seq", 0))))
+                elif op == "subscribe_all" and "*" not in subs:
+                    # lists (home, inbox, threads) learn that something changed anywhere and refetch; no payloads
+                    q = brain.events.subscribe(None)
+                    subs["*"] = q
+
+                    async def announce(q: asyncio.Queue = q) -> None:
+                        while True:
+                            ev = await q.get()
+                            await sock.send_json({"op": "changed", "thread_id": ev["thread_id"], "seq": ev["seq"],
+                                                  "type": ev["type"]})
+
+                    pumps["*"] = asyncio.create_task(announce())
                 elif op == "unsubscribe":
                     tid = msg.get("thread_id", "")
                     if tid in pumps:
@@ -658,7 +685,7 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
         finally:
             for tid, task in pumps.items():
                 task.cancel()
-                brain.events.unsubscribe(tid, subs[tid])
+                brain.events.unsubscribe(None if tid == "*" else tid, subs[tid])
 
     _mount_pwa(app, brain)
     return app
