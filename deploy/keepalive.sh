@@ -20,6 +20,7 @@ STARTS="$BRAIN_ROOT/keepalive.starts"
 
 # Named Cloudflare tunnel (deploy/relay.md §2): keep it running even while Brain itself is healthy.
 TUNNEL_CFG="$BRAIN_ROOT/tunnel.yml"
+[ -f "$TUNNEL_CFG" ] && ! command -v cloudflared >/dev/null && echo "$(date -Is) warning: $TUNNEL_CFG exists but cloudflared is not on PATH; the named tunnel is down"
 if [ -f "$TUNNEL_CFG" ] && command -v cloudflared >/dev/null; then
   if ! pgrep -u "$(id -u)" -f "cloudflared tunnel .*--config $TUNNEL_CFG run" >/dev/null; then
     echo "$(date -Is) starting named tunnel"

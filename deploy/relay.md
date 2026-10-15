@@ -23,7 +23,7 @@ Once, on the login node:
         credentials-file: /home/<you>/.cloudflared/<tunnel-id>.json
         ingress:
           - hostname: brain.<your-domain>
-            service: http://127.0.0.1:8765   # the port keepalive.sh gives `brain serve`
+            service: unix:/home/<you>/.brain/brain.sock   # owner-only socket; preferred over the loopback port
           - service: http_status:404
 
 5. `brain endpoint set https://brain.<your-domain>`. The phone gets a "Brain moved" push; pair once more at the
