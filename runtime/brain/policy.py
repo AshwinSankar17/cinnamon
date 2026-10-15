@@ -148,16 +148,24 @@ SEPARATORS = {";", "&&", "||", "|", "&", "|&", "(", ")"}
 REDIRECTS = {">", ">>", ">|", "&>", "&>>", ">&"}
 
 
+HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n.*?\n\s*\2\s*(?=\n|$)", re.S)
+
+
+def _strip_heredocs(cmd: str) -> str:
+    """`cat > f <<'EOF' ... EOF`: keep `cat > f` (a real write), drop the body (text, not commands)."""
+    return HEREDOC.sub(lambda m: m.group(3), cmd)
+
+
 def _parse(cmd: str) -> tuple[list[list[str]], list[str]]:
     """Quote-aware split into simple commands (word lists) and output-redirect targets.
     `sed 's/a;b/c|d/'` or `echo "x > y"` are one command with no redirect; `cmd 2>&1` is not a file write."""
-    lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+    lex = shlex.shlex(_strip_heredocs(cmd), posix=True, punctuation_chars=True)
     lex.whitespace_split = True
     lex.commenters = ""
     try:
         toks = list(lex)
     except ValueError:  # unbalanced quotes: fall back to a plain split
-        toks = cmd.split()
+        toks = _strip_heredocs(cmd).split()
     cmds, cur, targets, i = [], [], [], 0
     while i < len(toks):
         t = toks[i]

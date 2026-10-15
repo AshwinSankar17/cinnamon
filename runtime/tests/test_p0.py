@@ -113,3 +113,24 @@ def test_pending_uses_the_clients_left_at_and_clamps_it(brain):
     with TestClient(create_app(brain, dev_no_auth=True)) as c:
         assert c.get(f"/v1/pending?since={left}").json()["since"]["jobs_finished"] == 1
         assert c.get("/v1/pending?since=abc").status_code == 422
+
+
+from brain.policy import PolicyContext, _out_of_scope_writes
+
+CTX = PolicyContext(worktree="/w/t1", vault_roots=("/vaults",), scratch_roots=("/tmp",))
+REAL_FALSE_POSITIVES = [
+    'ls ~/.local/bin | grep -i -E "brain|cb"; env | grep -i brain | sed \'s/=.*TOKEN.*/=<redacted>/\' | head; ps -ef | grep -i brain | grep -v grep | head -5',
+    "sed -i 's/x0_max_ratio: float = 1.0      # random x0 length ~ U{0..ratio\\*L1}/x0_max_ratio: float = 1.5      # random x0 length ~ U{0..ratio*L1}; >1 gives deletions/' edit_tts/edits.py && sed -i 's/x0_max_ratio: 1.0/x0_max_ratio: 1.5/' configs/base.yaml",
+    "W=$PWD && cat > slurm/eval_sweep.sh <<'EOF'\n#!/bin/bash\n# Needs RUN (run dir) and STEP; writes $RUN/eval_<step>/<setting>/wer.json.\nset -eo pipefail\nEOF\necho done",
+]
+
+
+@pytest.mark.parametrize("cmd", REAL_FALSE_POSITIVES)
+def test_real_false_positives_are_in_scope(cmd):
+    assert _out_of_scope_writes(cmd, CTX) == []
+
+
+def test_real_out_of_scope_writes_are_still_caught():
+    assert _out_of_scope_writes("echo hi > /etc/motd", CTX) == ["/etc/motd"]
+    assert _out_of_scope_writes("cat > /home/other/x.sh <<'EOF'\nhi\nEOF", CTX) == ["/home/other/x.sh"]
+    assert _out_of_scope_writes("rm -rf ~/.config/foo", CTX) == ["~/.config/foo"]
