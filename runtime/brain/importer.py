@@ -11,7 +11,8 @@ import json
 import time
 from pathlib import Path
 
-from . import repos
+from . import repos, transcript
+from .config import RepoConfig
 
 
 def config(settings) -> dict:
@@ -137,3 +138,88 @@ def discover(settings, now: float | None = None) -> list[dict]:
         if top and _inside(top, c["root"]):
             out.append({**s, "repo_path": top})
     return sorted(out, key=lambda s: s["last_ts"], reverse=True)
+
+
+BUDGET_BYTES = 400_000  # what the model is handed on the first phone message; the thread keeps everything
+
+
+def _cut(items: list[dict]) -> int:
+    """Index from which the newest items fit the budget, moved forward to start at a user message."""
+    total, start = 0, len(items)
+    for i in range(len(items) - 1, -1, -1):
+        total += len(json.dumps(items[i]))
+        if total > BUDGET_BYTES:
+            break
+        start = i
+    j = start
+    while j < len(items) and items[j]["k"] != "user":
+        j += 1
+    return j if j < len(items) else start
+
+
+def _ensure_repo(brain, path: str) -> str:
+    for r in brain.settings.repos:
+        if Path(r.path).resolve() == Path(path).resolve():
+            return r.id
+    base = Path(path).name
+    rid, n = base, 2
+    while brain.settings.repo(rid):
+        rid, n = f"{base}-{n}", n + 1
+    brain.settings.repos.append(RepoConfig(id=rid, path=path, name=base,
+                                           worktree_root=str(Path(path).parent / ".brain-worktrees"), vault_root=""))
+    brain.settings.save(brain.p)
+    brain.ir.log("import.repo", repo=rid, path=path)
+    return rid
+
+
+def _events(brain, thread_id: str, items: list[dict]) -> None:
+    names: dict[str, str] = {}
+    actor = {"kind": "import"}
+    for it in items:
+        if it["k"] == "user":
+            brain.events.append(thread_id, "user.message", {"text": it["text"]}, actor=actor)
+        elif it["k"] == "assistant":
+            brain.events.append(thread_id, "assistant.text", {"text": it["text"]}, actor=actor)
+        elif it["k"] == "call":
+            names[it["id"]] = it.get("name") or "?"
+            brain.events.append(thread_id, "tool.started", {
+                "tool_use_id": it["id"], "tool": it.get("name"), "summary": it.get("shell") or it.get("name"),
+                "input_preview": json.dumps(it.get("input"))[:1500]}, actor=actor)
+        elif it["k"] == "result":
+            brain.events.append(thread_id, "tool.completed", {
+                "tool_use_id": it["id"], "tool": names.get(it["id"], "?"), "ok": not it.get("error"),
+                "output_preview": str(it.get("output", ""))[-4000:]}, actor=actor)
+
+
+def candidates(brain) -> list[dict]:
+    have = {r["imported_from"]: r["id"] for r in
+            brain.db.q("SELECT id, imported_from FROM threads WHERE imported_from IS NOT NULL")}
+    return [{**c, "thread_id": have.get(f"{c['provider']}:{c['session_id']}")} for c in discover(brain.settings)]
+
+
+def import_session(brain, provider: str, session_id: str, provider_override: str | None = None) -> dict:
+    key = f"{provider}:{session_id}"
+    row = brain.db.one("SELECT id FROM threads WHERE imported_from=?", (key,))
+    if row:
+        return brain.thread_view(brain.thread(row["id"]))
+    cand = next((c for c in discover(brain.settings) if c["provider"] == provider and c["session_id"] == session_id), None)
+    if cand is None:
+        raise KeyError(f"no importable {provider} session {session_id}")
+    read = transcript.read_claude if provider == "claude" else transcript.read_codex
+    items, _ = read(Path(cand["path"]))
+    items, _ = brain.redactor.redact_obj(items)  # terminal transcripts can hold echoed tokens
+    run_as = provider_override or provider
+    t = brain.create_thread(_ensure_repo(brain, cand["repo_path"]), cand["title"], "readonly", run_as)
+    tid = t["id"]
+    brain.db.x("UPDATE threads SET imported_from=? WHERE id=?", (key, tid))
+    brain._append_transcript(tid, provider, None, items)
+    _events(brain, tid, items)
+    cut = _cut(items)
+    brain.db.x("INSERT INTO provider_sessions(thread_id, provider, native_session_id, sync_seq, updated_at, native_seen,"
+               " canon_synced) VALUES (?,?,NULL,0,?,0,?)", (tid, run_as, time.time(), cut))
+    brain.events.append(tid, "system.notice", {"text": (
+        f"Imported {len(items)} items from your terminal session {session_id} ({cand['path']}). Your next message "
+        f"continues it here in a new session; the terminal's session is untouched."
+        + (f" The model is given the last {len(items) - cut} items; the full history stays in this thread." if cut else ""))})
+    brain.ir.log("import", thread=tid, source=key, items=len(items))
+    return brain.thread_view(brain.thread(tid))

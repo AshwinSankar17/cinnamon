@@ -106,3 +106,72 @@ def test_discover_lists_interactive_codex_sessions_only(owner, brain, tmp_path):
     found = importer.discover(brain.settings)
     assert [(c["provider"], c["session_id"]) for c in found] == [("codex", "c-1")]
     assert found[0]["title"] == "profile the loader" and found[0]["live"] is True  # written just now
+
+
+SECRET = "wandb-secret-0123456789"  # the brain fixture's redactor knows this value
+
+
+def _long_session(owner, sid: str, n: int) -> Path:
+    recs = []
+    for i in range(n):
+        recs.append({"type": "user", "cwd": str(owner["repo"]), "sessionId": sid,
+                     "message": {"role": "user", "content": f"step {i} " + "x" * 2000}})
+        recs.append({"type": "assistant", "cwd": str(owner["repo"]), "sessionId": sid,
+                     "message": {"role": "assistant", "content": [{"type": "text", "text": f"done {i}"}]}})
+    return _claude_session(owner["profile"], owner["repo"], sid, records=recs, title="Long one")
+
+
+def test_import_creates_a_readonly_thread_with_history_and_events(owner, brain):
+    recs = [
+        {"type": "user", "cwd": str(owner["repo"]), "sessionId": "s1", "message": {"role": "user", "content": "check auth"}},
+        {"type": "assistant", "cwd": str(owner["repo"]), "sessionId": "s1", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "toolu_1", "name": "Bash", "input": {"command": "echo $WANDB_API_KEY"}}]}},
+        {"type": "user", "cwd": str(owner["repo"]), "sessionId": "s1", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "toolu_1", "content": SECRET}]}},
+        {"type": "assistant", "cwd": str(owner["repo"]), "sessionId": "s1",
+         "message": {"role": "assistant", "content": [{"type": "text", "text": "Key is set."}]}},
+    ]
+    src = _claude_session(owner["profile"], owner["repo"], "s1", records=recs, title="Auth check")
+    before = hashlib.sha256(src.read_bytes()).hexdigest()
+    t = importer.import_session(brain, "claude", "s1", provider_override="fake")
+    assert t["title"] == "Auth check" and t["mode"] == "readonly" and t["provider"] == "fake"
+    assert [i["k"] for i in brain.transcript(t["id"])] == ["user", "call", "result", "assistant"]
+    assert SECRET not in json.dumps(brain.transcript(t["id"]))
+    types = [e["type"] for e in brain.events.replay(t["id"], 0, 100)]
+    assert ["user.message", "tool.started", "tool.completed", "assistant.text"] == [x for x in types if x in
+            ("user.message", "tool.started", "tool.completed", "assistant.text")]
+    assert SECRET not in json.dumps(brain.events.replay(t["id"], 0, 100))
+    assert hashlib.sha256(src.read_bytes()).hexdigest() == before  # the terminal's file is never touched
+
+
+def test_import_is_idempotent_and_lists_the_thread(owner, brain):
+    _claude_session(owner["profile"], owner["repo"], "s2")
+    a = importer.import_session(brain, "claude", "s2", provider_override="fake")
+    b = importer.import_session(brain, "claude", "s2", provider_override="fake")
+    assert a["id"] == b["id"]
+    assert [c["thread_id"] for c in importer.candidates(brain)] == [a["id"]]
+
+
+def test_import_registers_a_new_repo_with_a_unique_id(owner, brain, tmp_path):
+    other = tmp_path / "x" / "hi-tts-v3"  # same folder name as the fixture repo, different path
+    other.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(other)], check=True)
+    _claude_session(owner["profile"], other, "s3")
+    t = importer.import_session(brain, "claude", "s3", provider_override="fake")
+    repo = brain.settings.repo(t["repo_id"])
+    assert t["repo_id"] == "hi-tts-v3-2" and repo.path == str(other) and repo.vault_root == ""
+
+
+def test_import_hands_the_model_only_the_recent_part(owner, brain):
+    _long_session(owner, "s4", 400)  # ~800 KB of items
+    t = importer.import_session(brain, "claude", "s4", provider_override="fake")
+    row = brain.db.one("SELECT * FROM provider_sessions WHERE thread_id=?", (t["id"],))
+    items = brain.transcript(t["id"])
+    tail = items[row["canon_synced"]:]
+    assert 0 < row["canon_synced"] < len(items) and tail[0]["k"] == "user"
+    assert sum(len(json.dumps(i)) for i in tail) <= importer.BUDGET_BYTES
+
+
+def test_unknown_sessions_are_not_importable(owner, brain):
+    with pytest.raises(KeyError):
+        importer.import_session(brain, "claude", "nope", provider_override="fake")
