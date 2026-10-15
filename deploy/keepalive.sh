@@ -18,6 +18,15 @@ STARTS="$BRAIN_ROOT/keepalive.starts"
 
 [ -e "$BRAIN_ROOT/DISABLED" ] || [ -e /etc/cluster-brain/disabled ] && { echo "$(date -Is) disabled"; exit 0; }
 
+# Named Cloudflare tunnel (deploy/relay.md §2): keep it running even while Brain itself is healthy.
+TUNNEL_CFG="$BRAIN_ROOT/tunnel.yml"
+if [ -f "$TUNNEL_CFG" ] && command -v cloudflared >/dev/null; then
+  if ! pgrep -u "$(id -u)" -f "cloudflared tunnel .*--config $TUNNEL_CFG run" >/dev/null; then
+    echo "$(date -Is) starting named tunnel"
+    setsid cloudflared tunnel --no-autoupdate --config "$TUNNEL_CFG" run >> "$BRAIN_ROOT/cloudflared.log" 2>&1 < /dev/null &
+  fi
+fi
+
 if [ -f "$LEASE" ]; then
   hb=$(python3 -c "import json,sys;print(int(json.load(open('$LEASE'))['heartbeat']))" 2>/dev/null || echo 0)
   host=$(python3 -c "import json;print(json.load(open('$LEASE'))['host'])" 2>/dev/null || echo "")

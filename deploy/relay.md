@@ -13,15 +13,25 @@ Needs outbound TCP/UDP 7844 (`brain probe` reports it). Hostname changes on ever
 Tunnels have no uptime guarantee and `trycloudflare.com` is on some institutional blocklists.
 
 ## 2. Cloudflare named tunnel — stable hostname (needs a domain on Cloudflare)
-    cloudflared tunnel login && cloudflared tunnel create brain
-    # ~/.cloudflared/config.yml
-    tunnel: brain
-    credentials-file: /home/<you>/.cloudflared/<id>.json
-    ingress:
-      - hostname: brain.<your-domain>
-        service: unix:/home/<you>/.brain/brain.sock
-      - service: http_status:404
-    cloudflared tunnel run brain
+Once, on the login node:
+1. `cloudflared tunnel login`
+2. `cloudflared tunnel create brain`
+3. `cloudflared tunnel route dns brain brain.<your-domain>`
+4. Write `~/.brain/tunnel.yml` (keep-alive starts the tunnel whenever this file exists):
+
+        tunnel: brain
+        credentials-file: /home/<you>/.cloudflared/<tunnel-id>.json
+        ingress:
+          - hostname: brain.<your-domain>
+            service: http://127.0.0.1:8765   # the port keepalive.sh gives `brain serve`
+          - service: http_status:404
+
+5. `brain endpoint set https://brain.<your-domain>`. The phone gets a "Brain moved" push; pair once more at the
+   new address, which never changes again.
+
+Keep-alive (cron, `deploy/keepalive.sh`) restarts the tunnel if it dies, even while Brain itself is healthy.
+Stop any quick tunnel once the named one works.
+
 Note: Cloudflare terminates TLS at its edge, so it can see traffic in clear. If that is unacceptable,
 use option 3.
 
