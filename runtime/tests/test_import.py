@@ -175,3 +175,18 @@ def test_import_hands_the_model_only_the_recent_part(owner, brain):
 def test_unknown_sessions_are_not_importable(owner, brain):
     with pytest.raises(KeyError):
         importer.import_session(brain, "claude", "nope", provider_override="fake")
+
+
+async def test_the_first_phone_message_hydrates_the_recent_part_then_runs(owner, brain):
+    from test_flows import _settle
+    src = _long_session(owner, "s5", 400)
+    before = hashlib.sha256(src.read_bytes()).hexdigest()
+    t = importer.import_session(brain, "claude", "s5", provider_override="fake")
+    cut = brain.db.one("SELECT canon_synced FROM provider_sessions WHERE thread_id=?", (t["id"],))["canon_synced"]
+    items = brain.transcript(t["id"])
+    await brain.send_message(t["id"], "what was the last step?")
+    await _settle(brain, t["id"])
+    fake = brain.providers["fake"]
+    assert fake.hydrated == [items[cut:]]
+    assert fake.prompts[-1] == "what was the last step?"
+    assert hashlib.sha256(src.read_bytes()).hexdigest() == before
