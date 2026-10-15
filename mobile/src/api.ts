@@ -22,6 +22,7 @@ import {
 } from './crypto';
 import type {
   Approval,
+  ImportCandidate,
   BrainEvent,
   Health,
   Job,
@@ -487,6 +488,9 @@ export const api = {
     return all;
   },
 
+  imports: () => authed<ImportCandidate[]>('GET', '/v1/imports'),
+  importSession: (provider: string, session_id: string) =>
+    authed<Thread>('POST', '/v1/imports', { body: { provider, session_id } }),
   pending: (sinceMs?: number | null) =>
     authed<Pending>('GET', sinceMs ? `/v1/pending?since=${Math.floor(sinceMs / 1000)}` : '/v1/pending'),
 
