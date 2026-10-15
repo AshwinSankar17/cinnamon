@@ -96,12 +96,13 @@ export function SceneDefs({ t }: { t: Tokens }) {
   );
 }
 
-function Bakery({ t, dark }: { t: Tokens; dark: boolean }) {
+function Bakery({ t, dark, plain }: { t: Tokens; dark: boolean; plain?: boolean }) {
   return (
     <>
       <Rect width={390} height={844} fill={t.sWall} />
       <Rect y={330} width={390} height={232} fill="url(#bkTiles)" />
       <Circle cx={310} cy={380} r={250} fill="url(#bkGlow)" />
+      {plain ? null : (<>
       <G transform="translate(252 312)">
         <Rect width={118} height={122} rx={12} fill={t.sFrame} />
         <Rect x={8} y={8} width={102} height={106} rx={7} fill="url(#bkWin)" />
@@ -124,26 +125,33 @@ function Bakery({ t, dark }: { t: Tokens; dark: boolean }) {
         <Rect x={-6} y={48} width={134} height={7} rx={2} fill={t.sWoodDark} />
       </G>
       <Rect x={12} y={212} width={366} height={5} rx={2.5} fill={t.sRail} />
+      </>)}
       <Rect y={560} width={390} height={22} fill={t.sTop} />
       <Rect y={582} width={390} height={262} fill={t.sWood} />
       <Path d="M0 598H390M98 598V844M196 598V844M294 598V844" strokeWidth={2} stroke={t.sWoodDark} opacity={.5} />
+      {plain ? null : (<>
       <G transform="translate(190 566)">
         <Ellipse rx={100} ry={11} fill="none" strokeWidth={3} stroke={t.sRack} />
         <Path d="M-84 -5H84M-96 0H96M-84 5H84" strokeWidth={1.6} stroke={t.sRack} opacity={.8} />
       </G>
+      </>)}
     </>
   );
 }
 
-function Forest({ t, dark }: { t: Tokens; dark: boolean }) {
+function Forest({ t, dark, plain }: { t: Tokens; dark: boolean; plain?: boolean }) {
   return (
     <>
       <Rect width={390} height={844} fill="url(#fsSky)" />
+      {plain ? null : (<>
       <Circle cx={64} cy={268} r={30} fill={t.sOrb} />
+      </>)}
       <Path d="M0 470C70 438 150 452 230 432C300 416 350 428 390 414V844H0Z" fill={t.sFar} />
       <Path d={STATIC.pines} fill={t.sPines} />
       <Path d="M0 520C90 492 180 510 250 496C320 482 360 490 390 486V844H0Z" fill={t.sMid} />
+      {plain ? null : (<>
       <Path d="M150 230L60 620H120L190 230ZM235 240L200 620H250L262 240Z" fill={t.sRay} />
+      </>)}
       <Path d="M258 660C268 600 266 520 270 440C274 380 272 320 266 262H334C328 320 328 380 332 440C336 520 338 600 352 660Z" fill={t.sTrunk} />
       <Path d="M232 668C246 650 256 640 262 612L272 640C264 652 252 662 232 668ZM372 668C356 652 346 640 344 610L334 640C340 652 352 662 372 668Z" fill={t.sTrunk} />
       <Path d="M286 300C282 380 290 470 284 560M312 290C318 370 308 460 316 580M298 420C296 470 300 520 296 600" fill="none" strokeWidth={3} strokeLinecap="round" stroke={t.sBark} />
@@ -160,6 +168,7 @@ function Forest({ t, dark }: { t: Tokens; dark: boolean }) {
       <Path d="M0 604C70 592 140 600 210 594C280 588 340 596 390 590V844H0Z" fill={t.sGround} />
       <Path d="M18 606l6-14 3 14 5-10 2 10M340 600l5-12 3 12 4-9 2 9M228 604l4-10 3 10" fill="none" strokeWidth={2.2} strokeLinecap="round" stroke={t.sGrass} />
       <Path d="M24 640C40 610 70 604 92 612C70 612 52 624 44 644ZM30 650C20 624 0 616 -6 618" fill="none" strokeWidth={3} strokeLinecap="round" stroke={t.sGrass} />
+      {plain ? null : (<>
       <Path d="M82 596C82 620 86 640 80 664H220C214 640 218 620 218 596Z" fill={t.sStump} />
       <Ellipse cx={150} cy={596} rx={68} ry={14} fill={t.sStumpTop} />
       <Ellipse cx={150} cy={596} rx={48} ry={9} fill="none" strokeWidth={1.4} stroke={t.sRing} />
@@ -170,11 +179,12 @@ function Forest({ t, dark }: { t: Tokens; dark: boolean }) {
         <Circle cx={-4} cy={-18} r={2} fill="#fff" opacity={.85} />
         <Circle cx={5} cy={-16} r={1.6} fill="#fff" opacity={.85} />
       </G>
+      </>)}
     </>
   );
 }
 
-function Rustic({ t, dark }: { t: Tokens; dark: boolean }) {
+function Rustic({ t, dark, plain }: { t: Tokens; dark: boolean; plain?: boolean }) {
   return (
     <>
       <Rect width={390} height={844} fill={t.sPlank} />
@@ -182,6 +192,7 @@ function Rustic({ t, dark }: { t: Tokens; dark: boolean }) {
       <Ellipse cx={46} cy={470} rx={5} ry={8} fill={t.sKnot} />
       <Ellipse cx={206} cy={372} rx={4} ry={7} fill={t.sKnot} />
       <Circle cx={320} cy={520} r={230} fill="url(#rsGlow)" />
+      {plain ? null : (<>
       <Rect x={18} y={200} width={196} height={150} rx={8} fill={t.sFrame} />
       <Rect x={26} y={208} width={180} height={134} rx={4} fill={t.sCork} />
       <Path d="M40 228h.01M90 300h.01M150 220h.01M186 330h.01M60 330h.01M170 270h.01" strokeWidth={3} strokeLinecap="round" stroke={t.sCorkDot} />
@@ -212,17 +223,20 @@ function Rustic({ t, dark }: { t: Tokens; dark: boolean }) {
         <Rect x={-14} y={-30} width={28} height={30} rx={8} fill="rgba(255,255,255,.45)" stroke="rgba(255,255,255,.7)" />
         <Path d="M-8 -2V-22M-2 -2V-24M4 -2V-21" stroke="#8A4320" strokeWidth={4} strokeLinecap="round" />
       </G>
+      </>)}
       <Path d="M0 604L390 590V844H0Z" fill={t.sTable} />
       <Path d="M0 604L390 590V600L0 616Z" fill={t.sTableTop} />
       <Path d="M0 640L390 628M0 700L390 690M0 770L390 762" strokeWidth={1.5} opacity={.35} stroke={t.sFrame} />
+      {plain ? null : (<>
       <Path d="M54 606L236 598L248 640L46 650Z" fill="url(#rsCheck)" opacity={.95} />
       <Ellipse cx={160} cy={610} rx={96} ry={19} fill={t.sPlateRim} />
       <Ellipse cx={160} cy={607} rx={80} ry={14} fill={t.sPlate} />
+      </>)}
     </>
   );
 }
 
-function Space({ t, dark }: { t: Tokens; dark: boolean }) {
+function Space({ t, dark, plain }: { t: Tokens; dark: boolean; plain?: boolean }) {
   return (
     <>
       <Rect width={390} height={844} fill="url(#spSky)" />
@@ -234,25 +248,29 @@ function Space({ t, dark }: { t: Tokens; dark: boolean }) {
         <Path d={STATIC.galaxy} fill="none" stroke="#E9C9FF" strokeWidth={2.4} strokeLinecap="round" opacity={0.55} />
         <Circle cx={300} cy={300} r={5} fill="#FFF4D6" />
       </G>
+      {plain ? null : (<>
       <Circle cx={62} cy={292} r={34} fill={t.sPlanet} />
       <Path d="M62 258a34 34 0 0 1 0 68a22 34 0 0 0 0 -68Z" fill="rgba(0,0,0,.12)" />
       <Ellipse cx={62} cy={294} rx={60} ry={11} fill="none" strokeWidth={5} transform="rotate(-14 62 294)" stroke={t.sRing} />
       <Circle cx={350} cy={420} r={9} fill={t.sPlanet2} />
+      </>)}
       <Path d="M-20 680C80 640 300 640 410 680V844H-20Z" fill={t.sGround} />
       <Ellipse cx={80} cy={700} rx={30} ry={6} fill={t.sCrater} />
       <Ellipse cx={300} cy={716} rx={22} ry={5} fill={t.sCrater} />
       <Ellipse cx={200} cy={676} rx={14} ry={3} fill={t.sCrater} />
+      {plain ? null : (<>
       <G transform="translate(60 670)">
         <Path d="M0 -40C8 -30 10 -14 8 0H-8C-10 -14 -8 -30 0 -40Z" fill={t.sSat} />
         <Circle cx={0} cy={-22} r={4} fill={t.sPanel} />
         <Path d="M-8 -6L-16 4H-6ZM8 -6L16 4H6Z" fill="#E0663A" />
       </G>
       <Ellipse cx={200} cy={505} rx={176} ry={96} fill="none" strokeWidth={1.5} strokeDasharray="3 6" transform="rotate(-6 200 505)" stroke={t.sOrbit} />
+      </>)}
     </>
   );
 }
 
-function Tide({ t, dark }: { t: Tokens; dark: boolean }) {
+function Tide({ t, dark, plain }: { t: Tokens; dark: boolean; plain?: boolean }) {
   return (
     <>
       <Rect width={390} height={844} fill="url(#tdSea)" />
@@ -277,14 +295,18 @@ function Tide({ t, dark }: { t: Tokens; dark: boolean }) {
       <G transform="translate(262 640) rotate(14)">
         <Path d="M0 -12L3 -4L12 -4L5 2L8 11L0 5L-8 11L-5 2L-12 -4L-3 -4Z" fill="#F2A35E" />
       </G>
+      {plain ? null : (<>
       <Path d="M98 560C100 488 290 488 292 560C250 548 140 548 98 560Z" fill={t.sShell} />
       <Path d="M118 552C140 510 160 500 195 498M150 548C164 516 178 504 195 500M240 548C226 516 212 504 195 500M272 552C250 510 230 500 195 498" fill="none" strokeWidth={2} stroke={t.sShell2} />
       <Path d="M86 600C96 626 294 626 304 600C290 584 100 584 86 600Z" fill={t.sShell2} />
+      </>)}
     </>
   );
 }
 
-export const BACKDROPS: Record<WorldId, (p: { t: Tokens; dark: boolean }) => ReactElement> = {
+/** `plain` drops the furniture (windows, hearth, stump, planets, the clam) and keeps the setting: walls, floors, sky,
+ *  sea, ground. The mirrored continuation past the scene's edges uses it, so nothing appears twice. */
+export const BACKDROPS: Record<WorldId, (p: { t: Tokens; dark: boolean; plain?: boolean }) => ReactElement> = {
   bakery: Bakery,
   forest: Forest,
   rustic: Rustic,
