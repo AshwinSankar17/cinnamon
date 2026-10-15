@@ -186,7 +186,7 @@ def create_app(brain: Brain, *, dev_no_auth: bool = False) -> FastAPI:
             import yaml
             prof = yaml.safe_load(brain.p.site_profile.read_text()) or {}
         return {"ok": True, "brain_pub": brain.ident.pub_b64, "version": __version__,
-                "rung": prof.get("rung", "unknown"), "paused": brain.paused}
+                "rung": prof.get("rung", "unknown"), "paused": brain.paused, "checks": brain.checks()}
 
     @app.post("/v1/pair/complete")
     def pair_complete(b: PairComplete) -> dict:

@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -1074,6 +1075,13 @@ class Brain:
         for scope in ("all", thread_id):
             self.db.x("INSERT INTO ledger(day, scope, metric, value) VALUES (?,?,?,?) ON CONFLICT(day, scope, metric)"
                       " DO UPDATE SET value=value+excluded.value", (day, scope, metric, value))
+
+    def checks(self) -> dict:
+        """What Brain needs on PATH. A missing CLI otherwise shows up only as failed turns."""
+        def present(b: str | None) -> bool:
+            return b is None or bool(shutil.which(b)) or Path(b).is_file()
+        return {"providers": {n: present(getattr(p, "binary", None)) for n, p in self.providers.items()},
+                "sbatch": bool(shutil.which("sbatch"))}
 
     def ledger_today(self) -> dict:
         day = time.strftime("%Y-%m-%d")

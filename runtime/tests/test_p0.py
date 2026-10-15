@@ -140,3 +140,14 @@ def test_providers_mark_the_default(brain):
     with TestClient(create_app(brain, dev_no_auth=True)) as c:
         ps = c.get("/v1/providers").json()
     assert [p["name"] for p in ps if p["default"]] == ["fake"]
+
+
+def test_health_reports_missing_binaries(brain, monkeypatch):
+    class P:
+        binary = "/nonexistent/claude"
+    brain.providers["claude"] = P()
+    c = brain.checks()
+    assert c["providers"] == {"fake": True, "claude": False}
+    assert c["sbatch"] is True  # tests put fakeslurm on PATH
+    with TestClient(create_app(brain, dev_no_auth=True)) as cl:
+        assert cl.get("/v1/health").json()["checks"]["providers"]["claude"] is False
