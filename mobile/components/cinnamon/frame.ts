@@ -1,12 +1,45 @@
-/** Map the mockup's 390×844 design space onto the screen. A phone (as tall as the design or taller) is covered by
- *  height, losing a little off the sides. Anything wider (a desktop column, a tablet, a short browser window) fits the
- *  height and is centred: covering it would zoom the scene and crop the roll and its threads away. The backdrop's
- *  edges are stretched into the side margins (see SceneBackdrop in app/index.tsx). */
+/** Map the mockup's 390×844 design space onto the screen. The screen's free space is what lies between the header and
+ *  the bottom tray; each world's content (its threads, the roll, the companion) must sit inside it, whatever the phone.
+ *  So the scene is scaled to fit that content into the free space, never larger than covering the screen, and placed
+ *  so the backdrop leaves as little uncovered as possible. What it cannot cover (a short or wide screen) is filled by
+ *  continuing the backdrop's own edges (SceneBackdrop). */
+import type { WorldId } from '@/src/worlds';
+
 export type Frame = { s: number; ox: number; oy: number; w: number; h: number };
 
-export function frameFor(w: number, h: number): Frame {
-  const s = h / 844;
-  return { s, ox: (w - 390 * s) / 2, oy: (h - 844 * s) / 2, w, h };
+/** Per world, in design units: the content's top and bottom (threads down to the lowest character) and its left and
+ *  right extent. Everything outside may be cropped or covered by the header and tray. */
+export const BAND: Record<WorldId, { top: number; bottom: number; left: number; right: number; calm: number }> = {
+  bakery: { top: 206, bottom: 596, left: 10, right: 380, calm: 320 },
+  forest: { top: 352, bottom: 668, left: 14, right: 382, calm: 190 },
+  rustic: { top: 198, bottom: 664, left: 16, right: 388, calm: 196 },
+  space: { top: 240, bottom: 618, left: 4, right: 386, calm: 226 },
+  tide: { top: 246, bottom: 628, left: 10, right: 380, calm: 240 },
+};
+// calm: down to which design y the backdrop is plain enough (wall, sky, water) for the header to sit on.
+
+/** Which design column (x) each world's left and right margins continue: a clean edge, free of props that would smear. */
+export const EDGE: Record<WorldId, [number, number]> = {
+  bakery: [11, 379],
+  forest: [11, 11],
+  rustic: [11, 11],
+  space: [389.5, 389.5],
+  tide: [389.5, 389.5],
+};
+
+/** `top`/`bottom`: the free space between the header and the tray, in screen pixels. */
+export function frameFor(world: WorldId, w: number, h: number, top: number, bottom: number): Frame {
+  const b = BAND[world];
+  const fit = Math.max(0.1, bottom - top) / (b.bottom - b.top);
+  const s = Math.min(fit, w / (b.right - b.left), Math.max(w / 390, h / 844));
+  const ox = (w - 390 * s) / 2;
+  // Any oy in [lo, hi] keeps the content inside the free space (top below the header, bottom above the tray); within
+  // it, prefer an oy that leaves no backdrop uncovered (h - 844s <= oy <= 0), nearest the content's centred position.
+  const lo = top - b.top * s;
+  const hi = bottom - b.bottom * s;
+  const want = Math.min(0, Math.max(h - 844 * s, (lo + hi) / 2));
+  const oy = Math.min(hi, Math.max(lo, want));
+  return { s, ox, oy, w, h };
 }
 
 /** Screen position of a design-space point. */

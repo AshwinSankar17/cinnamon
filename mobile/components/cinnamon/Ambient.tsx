@@ -65,7 +65,7 @@ export function Ambient({ world, dark, f, live }: { world: WorldId; dark: boolea
         let style: object;
         if (world === 'tide') {
           style = { opacity: ph.interpolate({ inputRange: [0, 0.1, 0.9, 1], outputRange: [0, 0.9, 0.9, 0] }),
-                    transform: [{ translateY: ph.interpolate({ inputRange: [0, 1], outputRange: [0, -520 * f.s] }) },
+                    transform: [{ translateY: ph.interpolate({ inputRange: [0, 1], outputRange: [0, -330 * f.s] }) }, // they pop below the header, not through it
                                 { translateX: ph.interpolate({ inputRange: [0, 1], outputRange: [0, 10 * f.s] }) }] };
         } else if (world === 'space') {
           style = { opacity: ph.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.9, 0.1, 0.9] }) };

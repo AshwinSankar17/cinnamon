@@ -7,11 +7,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, Vibration, View, useWindowDimensions } from 'react-native';
 import { Redirect, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Ambient } from '@/components/cinnamon/Ambient';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
-import { BACKDROPS, SceneDefs } from '@/components/cinnamon/backdrops';
-import { at, frameFor, HERO } from '@/components/cinnamon/frame';
+import { at, BAND, frameFor, HERO } from '@/components/cinnamon/frame';
+import { SceneBackdrop } from '@/components/cinnamon/SceneBackdrop';
 import { Menu } from '@/components/cinnamon/Menu';
 import { Pet, SAY_AT } from '@/components/cinnamon/Pets';
 import { Presenters } from '@/components/cinnamon/Presenters';
@@ -31,6 +31,8 @@ export default function StandupScreen() {
   const insets = useSafeAreaInsets();
   const win = useWindowDimensions();
   const [box, setBox] = useState<{ w: number; h: number } | null>(null); // the app column, not the window (desktop caps it)
+  const [headerH, setHeaderH] = useState<number | null>(null);
+  const [trayTop, setTrayTop] = useState<number | null>(null);
   const W = box?.w ?? win.width;
   const H = box?.h ?? win.height;
   const { world, id, tokens: t, dark, pet, showcase, setWorld } = useWorld();
@@ -92,7 +94,10 @@ export default function StandupScreen() {
 
   if (!conn.paired) return <Redirect href="/pair" />;
 
-  const f = frameFor(W, H);
+  // the free space between the header and the tray, measured once laid out (estimates until then)
+  const freeTop = (headerH ?? insets.top + 174) + 6;
+  const freeBottom = (trayTop ?? H - Math.max(insets.bottom, 12) - 58 - (s?.waiting ? 74 : 0)) - 6;
+  const f = frameFor(id, W, H, freeTop, freeBottom);
   const short = Math.min(1, H / 844); // a short browser window shrinks the scene; the headline follows so they never meet
   const asleep = status !== 'live' && status !== 'connecting';
   const mood: Mood = asleep || s?.stale ? 'asleep' : s?.waiting ? 'needs' : s?.runningJobs.length || s?.focus?.state === 'running' ? 'working' : 'proud';
@@ -100,7 +105,6 @@ export default function StandupScreen() {
   const rollW = 224 * hs * f.s;
   const rollH = (rollW * 236) / 224;
   const rollPos = { left: f.ox + hx * f.s - rollW * ROLL_BASE.x, top: f.oy + hy * f.s - rollH * ROLL_BASE.y };
-  const Backdrop = BACKDROPS[id];
   const liveText = status === 'live' && !s?.stale ? (conn.paused ? 'paused' : 'live') : s ? `as of ${Math.max(1, Math.round((Date.now() - s.asOf) / 60000))} min ago` : status;
   const sayPos = at(f, SAY_AT[id][0], SAY_AT[id][1]);
   const composerTarget = s?.focus ? (showcase ? 'the thread' : s.focus.title) : null;
@@ -129,20 +133,17 @@ export default function StandupScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg2, overflow: 'hidden' }}
       onLayout={(e) => { const { width, height } = e.nativeEvent.layout; setBox((b) => (b && b.w === width && b.h === height ? b : { w: width, h: height })); }}>
-      {(f.ox > 0 ? [[0, f.ox, '11 0 0.5 844'], [W - f.ox, f.ox, `${id === 'forest' ? 11 : 379} 0 0.5 844`]] as const : []).map(([left, w, vb]) => (
-        // the scene's outermost column stretched across a wide screen's margins: walls, sky and counters run on
-        <Svg key={vb} width={w + 1} height={H} viewBox={vb} preserveAspectRatio="none" style={{ position: 'absolute', left: left - 0.5 }}>
-          <SceneDefs t={t} />
-          <Backdrop t={t} dark={dark} />
+      <SceneBackdrop world={id} f={f} t={t} dark={dark} />
+      {headerH && headerH > f.oy + BAND[id].calm * f.s ? ( // busy scenery pulled up under the header: fade it out behind the text
+        <Svg pointerEvents="none" width={W} height={headerH + 28} style={{ position: 'absolute', left: 0, top: 0 }}>
+          <Defs><LinearGradient id="hdr" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={t.bg2} stopOpacity={0.94} />
+            <Stop offset={headerH / (headerH + 28)} stopColor={t.bg2} stopOpacity={0.82} />
+            <Stop offset="1" stopColor={t.bg2} stopOpacity={0} />
+          </LinearGradient></Defs>
+          <Rect width={W} height={headerH + 28} fill="url(#hdr)" />
         </Svg>
-      ))}
-      {f.ox > 0 ? [0, W - f.ox].map((left) => ( // a light veil so the margins recede and the scene reads as the stage
-        <View key={left} pointerEvents="none" style={{ position: 'absolute', left, top: 0, width: f.ox, height: H, backgroundColor: t.bg2, opacity: 0.35 }} />
-      )) : null}
-      <Svg width={390 * f.s} height={844 * f.s} viewBox="0 0 390 844" style={{ position: 'absolute', left: f.ox, top: f.oy }}>
-        <SceneDefs t={t} />
-        <Backdrop t={t} dark={dark} />
-      </Svg>
+      ) : null}
       <Ambient world={id} dark={dark} f={f} live={live} />
       {s ? (
         <Presenters world={id} t={t} f={f} threads={s.threads.filter((x) => x.id !== s.focus?.id || s.threads.length === 1)} live={live} showcase={showcase}
@@ -166,7 +167,8 @@ export default function StandupScreen() {
         </View>
       ) : null}
 
-      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, paddingTop: insets.top + 10, paddingHorizontal: 18 }}>
+      <View pointerEvents="box-none" onLayout={(e) => setHeaderH(Math.round(e.nativeEvent.layout.height))}
+        style={{ position: 'absolute', left: 0, right: 0, top: 0, paddingTop: insets.top + 10, paddingHorizontal: 18 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, height: 44 }}>
           <Svg width={24} height={24} viewBox="0 0 24 24"><Path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8" fill="none" stroke={t.accent} strokeWidth={1.8} strokeLinecap="round" /></Svg>
           <Text style={{ flex: 1, fontFamily: display, fontSize: 23 * world.displayScale, color: t.ink }}>Cinnamon</Text>
@@ -175,7 +177,7 @@ export default function StandupScreen() {
             <Text style={{ fontFamily: mono, fontSize: 11, color: t.ink2 }}>{liveText}</Text>
           </View>
         </View>
-        <Text accessibilityRole="header" style={{ marginTop: 10, fontFamily: display, fontSize: 29 * world.displayScale * short, lineHeight: 32 * world.displayScale * short, color: t.ink }}>
+        <Text accessibilityRole="header" style={{ marginTop: 10, fontFamily: display, fontSize: 27 * world.displayScale * short, lineHeight: 30 * world.displayScale * short, color: t.ink }}>
           {s ? headline(s, showcase) : err ? 'Brain is not reachable.' : ' '}
         </Text>
         <Text style={{ marginTop: 8, maxWidth: 330, fontFamily: ui, fontSize: 13.5, lineHeight: 19, color: t.ink2 }}>
@@ -185,7 +187,7 @@ export default function StandupScreen() {
         {status === 'revoked' || status === 'identity_mismatch' ? <View style={{ marginTop: 12, marginHorizontal: -16 }}><ConnectionBanner /></View> : null}
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ position: 'absolute', left: 12, right: 12, bottom: Math.max(insets.bottom, 12) }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} onLayout={(e) => setTrayTop(Math.round(e.nativeEvent.layout.y))} style={{ position: 'absolute', left: 12, right: 12, bottom: Math.max(insets.bottom, 12) }}>
         {s?.waiting ? (
           <View style={{ marginBottom: 10 }}>
             <WaitingCard world={world} t={t} waiting={s.waiting} more={Math.max(0, s.waitingCount - 1)} live={live} fonts={{ display, mono, ui }}
