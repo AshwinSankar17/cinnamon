@@ -86,6 +86,39 @@ def _claude(profile: Path, cutoff: float) -> list[dict]:
     return out
 
 
+LIVE_WINDOW_S = 600  # Codex keeps no session registry: a rollout written in the last 10 minutes counts as open
+
+
+def _codex(home: Path, cutoff: float, now: float) -> list[dict]:
+    out = []
+    for f in (home / "sessions").glob("*/*/*/rollout-*.jsonl"):
+        mtime = f.stat().st_mtime
+        if mtime < cutoff:
+            continue
+        meta, title = None, None
+        with f.open(errors="replace") as fh:
+            for i, line in enumerate(fh):
+                if i == 0:
+                    try:
+                        meta = (json.loads(line).get("payload") or {})
+                    except json.JSONDecodeError:
+                        break
+                elif '"role": "user"' in line or '"role":"user"' in line:
+                    try:
+                        p = json.loads(line).get("payload") or {}
+                    except json.JSONDecodeError:
+                        continue
+                    text = "\n".join(x.get("text", "") for x in p.get("content") or [] if isinstance(x, dict))
+                    if text and not text.startswith("<"):
+                        title = text[:60]
+                        break
+        if not meta or not meta.get("cwd") or meta.get("originator") == "codex_exec":
+            continue
+        out.append({"provider": "codex", "session_id": meta.get("id") or f.stem, "path": str(f), "cwd": meta["cwd"],
+                    "title": title or "Imported Codex session", "last_ts": mtime, "live": now - mtime < LIVE_WINDOW_S})
+    return out
+
+
 def discover(settings, now: float | None = None) -> list[dict]:
     c = config(settings)
     if not c["root"]:
@@ -94,6 +127,8 @@ def discover(settings, now: float | None = None) -> list[dict]:
     found = []
     for d in c["claude_dirs"]:
         found += _claude(Path(d).expanduser(), cutoff)
+    for d in c["codex_dirs"]:
+        found += _codex(Path(d).expanduser(), cutoff, now or time.time())
     out = []
     for s in found:
         if not _inside(s["cwd"], c["root"]):

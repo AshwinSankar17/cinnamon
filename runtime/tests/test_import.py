@@ -84,3 +84,25 @@ def test_a_session_open_in_a_terminal_is_marked_live(owner, brain):
     (owner["profile"] / "sessions" / f"{os.getpid()}.json").write_text(
         json.dumps({"pid": os.getpid(), "sessionId": "s-live", "procStart": start}))
     assert importer.discover(brain.settings)[0]["live"] is True
+
+
+def _codex_session(home: Path, cwd: Path, sid: str, originator: str = "codex_cli_rs") -> Path:
+    d = home / "sessions" / "2026" / "10" / "15"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"rollout-2026-10-15T10-00-00-{sid}.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in [
+        {"type": "session_meta", "payload": {"id": sid, "cwd": str(cwd), "originator": originator}},
+        {"type": "response_item", "payload": {"type": "message", "role": "user",
+                                              "content": [{"type": "input_text", "text": "profile the loader"}]}},
+    ]) + "\n")
+    return f
+
+
+def test_discover_lists_interactive_codex_sessions_only(owner, brain, tmp_path):
+    home = tmp_path / "codexhome"
+    brain.settings.raw["import"]["codex_dirs"] = [str(home)]
+    _codex_session(home, owner["repo"], "c-1")
+    _codex_session(home, owner["repo"], "c-auto", originator="codex_exec")
+    found = importer.discover(brain.settings)
+    assert [(c["provider"], c["session_id"]) for c in found] == [("codex", "c-1")]
+    assert found[0]["title"] == "profile the loader" and found[0]["live"] is True  # written just now
