@@ -3,7 +3,7 @@
  *   Thread — work on an existing repo (read-only or its own worktree branch)
  *   Run    — a training run off an existing repo: worktree + its own vault folder for checkpoints/logs
  *   Idea   — a new project from scratch: Brain creates a repo + vault on the cluster and starts on the idea
- * Query params: kind=thread|run|idea, repo=<repo id> preselect.
+ * Query params: kind=thread|run|idea, repo=<repo id> preselect, message=<draft> prefill.
  */
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
@@ -63,7 +63,7 @@ function Field({
 }
 
 export default function NewScreen() {
-  const params = useLocalSearchParams<{ kind?: string; repo?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; repo?: string; message?: string }>();
   const [kind, setKind] = useState<Kind>((['thread', 'run', 'idea'] as Kind[]).includes(params.kind as Kind) ? (params.kind as Kind) : 'thread');
   const [repos, setRepos] = useState<Repo[] | null>(null);
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
@@ -71,7 +71,7 @@ export default function NewScreen() {
   const [provider, setProvider] = useState<Provider>('claude');
   const [mode, setMode] = useState<ThreadMode>('worktree');
   const [title, setTitle] = useState('');
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(params.message ?? '');
   const [busy, setBusy] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 

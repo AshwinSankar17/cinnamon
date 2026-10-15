@@ -81,6 +81,28 @@ def test_snapshot_caches_and_survives_a_hanging_probe(brain, monkeypatch):
         assert "providers" in cl.get("/v1/quota").json()
 
 
+def test_probes_run_in_parallel(brain, monkeypatch):
+    def slow(brain_, name):
+        time.sleep(0.4)
+        return {"windows": [], "plan": None, "source": name}
+    monkeypatch.setattr(quota, "_probe", slow)
+    monkeypatch.setattr(quota, "_cache", {})
+    brain.providers = {"claude": object(), "codex": object(), "agy": object()}
+    t0 = time.monotonic()
+    assert len(quota.snapshot(brain, force=True)["providers"]) == 3
+    assert time.monotonic() - t0 < 0.9  # serial would be 1.2 s
+
+
+def test_refresh_is_ignored_within_a_minute(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(quota, "_probe", lambda b, n: calls.append(n) or {"windows": [], "plan": None, "source": ""})
+    monkeypatch.setattr(quota, "_cache", {})
+    quota.snapshot(brain, force=True)
+    n = len(calls)
+    quota.snapshot(brain, force=True)  # "Ask again" tapped twice: spec §5 allows one probe per minute
+    assert len(calls) == n
+
+
 def test_rules_and_quiet_hours_switch(brain):
     with TestClient(create_app(brain, dev_no_auth=True)) as c:
         r = c.get("/v1/rules").json()

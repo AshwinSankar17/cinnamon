@@ -496,7 +496,7 @@ export const api = {
   imports: () => authed<ImportCandidate[]>('GET', '/v1/imports'),
   activity: (id: string, leftAtMs?: number | null) =>
     authed<Activity>('GET', `/v1/threads/${encodeURIComponent(id)}/activity`, { query: leftAtMs ? { left_at: Math.floor(leftAtMs / 1000) } : {} }),
-  quota: (refresh = false) => authed<Quota>('GET', '/v1/quota', { query: refresh ? { refresh: 1 } : {} }),
+  quota: (refresh = false) => authed<Quota>('GET', '/v1/quota', { query: refresh ? { refresh: 1 } : {}, timeoutMs: 90_000 }), // cold probes take ~40 s
   rules: () => authed<Rules>('GET', '/v1/rules'),
   setQuietHours: (enabled: boolean) => authed<QuietHours>('PATCH', '/v1/settings', { body: { quiet_hours_enabled: enabled } }),
   deviceSelf: () => authed<DeviceSelf>('GET', '/v1/devices/self'),

@@ -12,9 +12,10 @@ import os
 import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-TTL_S, PROBE_TIMEOUT_S = 300, 40  # agy /usage takes ~12 s cold
+TTL_S, REFRESH_MIN_S, PROBE_TIMEOUT_S = 300, 60, 40  # agy /usage takes ~12 s cold
 _cache: dict = {}
 _lock = threading.Lock()
 
@@ -115,19 +116,22 @@ def _probe(brain, name: str) -> dict:
     return {"windows": [], "plan": None, "source": "not reported"}
 
 
+def _one(brain, name: str) -> dict:
+    try:
+        r = _probe(brain, name)
+        return {"name": name, "plan": r.get("plan"), "windows": r["windows"], "source": r["source"], "error": None}
+    except Exception as e:  # a hung or missing CLI reports itself; it never blocks the others
+        return {"name": name, "plan": None, "windows": [], "source": "", "error": str(e)[:200]}
+
+
 def snapshot(brain, force: bool = False) -> dict:
     with _lock:
-        if not force and _cache.get("as_of", 0) > time.time() - TTL_S:
+        age = time.time() - _cache.get("as_of", 0)
+        if age < (REFRESH_MIN_S if force else TTL_S):  # "Ask again" probes at most once a minute (spec §5)
             return _cache["value"]
         names = [n for n in brain.providers if n in ("claude", "codex", "agy")] or list(brain.providers)
-        provs = []
-        for name in names:
-            try:
-                r = _probe(brain, name)
-                provs.append({"name": name, "plan": r.get("plan"), "windows": r["windows"], "source": r["source"],
-                              "error": None})
-            except Exception as e:  # a hung or missing CLI reports itself; it never blocks the others
-                provs.append({"name": name, "plan": None, "windows": [], "source": "", "error": str(e)[:200]})
+        with ThreadPoolExecutor(max_workers=max(1, len(names))) as ex:
+            provs = list(ex.map(lambda n: _one(brain, n), names))
         value = {"as_of": time.time(), "providers": provs}
         _cache.update(as_of=value["as_of"], value=value)
         return value

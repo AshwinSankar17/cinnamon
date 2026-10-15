@@ -9,6 +9,7 @@ import { Redirect, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { Ambient } from '@/components/cinnamon/Ambient';
+import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { BACKDROPS, SceneDefs } from '@/components/cinnamon/backdrops';
 import { at, frameFor, HERO } from '@/components/cinnamon/frame';
 import { Menu } from '@/components/cinnamon/Menu';
@@ -56,7 +57,8 @@ export default function StandupScreen() {
       setErr(describeError(e));
     }
   }, []);
-  useFocusEffect(useCallback(() => { reload(); }, [reload]));
+  // The home subscribes to no thread, so socket events rarely reach it: poll while it is on screen.
+  useFocusEffect(useCallback(() => { reload(); const iv = setInterval(reload, 20_000); return () => clearInterval(iv); }, [reload]));
   useEffect(() => {
     let last = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -82,10 +84,12 @@ export default function StandupScreen() {
     });
   }, [id, dark, wipe, wipeColor, setWorld]);
 
+  const status = statusOf(conn);
+  useEffect(() => { if (status === 'live') reload(); }, [status, reload]);
+
   if (!conn.paired) return <Redirect href="/pair" />;
 
   const f = frameFor(W, H);
-  const status = statusOf(conn);
   const asleep = status !== 'live' && status !== 'connecting';
   const mood: Mood = asleep || s?.stale ? 'asleep' : s?.waiting ? 'needs' : s?.runningJobs.length || s?.focus?.state === 'running' ? 'working' : 'proud';
   const [hx, hy, hs] = HERO[id];
@@ -100,7 +104,7 @@ export default function StandupScreen() {
   const send = async () => {
     const text = draft.trim();
     if (!text) return;
-    if (!s?.focus) return router.push('/new');
+    if (!s?.focus) return router.push({ pathname: '/new', params: { message: text } });
     setSending(true);
     try {
       await api.sendMessage(s.focus.id, text);
@@ -162,6 +166,8 @@ export default function StandupScreen() {
         <Text style={{ marginTop: 8, maxWidth: 330, fontFamily: ui, fontSize: 13.5, lineHeight: 19, color: t.ink2 }}>
           {s ? subline(s, showcase) : err ?? ''}
         </Text>
+        {s && err ? <Text accessibilityRole="alert" style={{ marginTop: 8, fontFamily: ui, fontSize: 13, color: t.needs }}>{err}</Text> : null}
+        {status === 'revoked' || status === 'identity_mismatch' ? <View style={{ marginTop: 12, marginHorizontal: -16 }}><ConnectionBanner /></View> : null}
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ position: 'absolute', left: 12, right: 12, bottom: Math.max(insets.bottom, 12) }}>
