@@ -896,15 +896,20 @@ class Brain:
 
     def expire_threads(self) -> list[str]:
         """Archive threads idle longer than thread_ttl_days (0 = never). Pinned threads, threads that need the owner
-        or are working, and threads with an open wait or approval never expire. History and branch are kept."""
+        or are working, and threads with an open wait, a pending approval or listening test, or a job active within
+        the TTL never expire. History and branch are kept."""
         ttl = float(self.settings.raw.get("thread_ttl_days", 3) or 0)
         if ttl <= 0:
             return []
+        cutoff = now() - ttl * 86400
         rows = self.db.q(
             "SELECT id FROM threads t WHERE archived=0 AND pinned=0 AND state='idle' AND updated_at < ?"
             " AND NOT EXISTS (SELECT 1 FROM approvals a WHERE a.thread_id=t.id AND a.state='pending')"
-            " AND NOT EXISTS (SELECT 1 FROM waits w WHERE w.thread_id=t.id AND w.state='open')",
-            (now() - ttl * 86400,))
+            " AND NOT EXISTS (SELECT 1 FROM waits w WHERE w.thread_id=t.id AND w.state='open')"
+            " AND NOT EXISTS (SELECT 1 FROM listening_tests l WHERE l.thread_id=t.id AND l.state='pending')"
+            " AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.thread_id=t.id AND (j.updated_at >= ? OR j.state NOT IN (%s)))"
+            % ",".join("?" * len(slurm.TERMINAL)),
+            (cutoff, cutoff, *slurm.TERMINAL))
         out = []
         for r in rows:
             if r["id"] in self._tasks:

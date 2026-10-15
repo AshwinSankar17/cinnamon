@@ -55,3 +55,17 @@ async def test_failed_job_push_uses_the_label(brain, pushes, monkeypatch):
     monkeypatch.setattr(brain.watcher, "poll", lambda jobs, force: [slurm.JobUpdate("9002", "FAILED", 1, "")])
     await brain.tick()
     assert ("failed", "v3_gate failed") in [(k, ti) for k, ti, _ in pushes]
+
+
+def test_expiry_spares_pending_listening_tests_and_recent_jobs(brain):
+    brain.settings.raw["thread_ttl_days"] = 3
+    listen = brain.create_thread("hi-tts-v3", "listen", "worktree")
+    job = brain.create_thread("hi-tts-v3", "job", "worktree")
+    plain = brain.create_thread("hi-tts-v3", "plain", "worktree")
+    brain.db.x("INSERT INTO listening_tests(id, thread_id, path, title, n_items, n_systems, created_at)"
+               " VALUES ('lt1', ?, '/x', 't', 5, 2, 0)", (listen["id"],))
+    _job(brain, job["id"], job_id="9003")  # finished just now
+    old = time.time() - 5 * 86400
+    for x in (listen, job, plain):
+        brain.db.x("UPDATE threads SET updated_at=? WHERE id=?", (old, x["id"]))
+    assert brain.expire_threads() == [plain["id"]]
