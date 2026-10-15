@@ -239,7 +239,7 @@ class Brain:
     @staticmethod
     def repo_view(r) -> dict:
         return {"id": r.id, "name": r.name or r.id, "path": r.path, "default_branch": r.default_branch,
-                "profile": r.profile, "archive_policy": r.archive_policy, "vault_root": r.vault_root}
+                "profile": r.profile, "vault_root": r.vault_root}
 
     def patch_thread(self, thread_id: str, **fields: Any) -> dict:
         allowed = {k: v for k, v in fields.items() if k in ("title", "pinned", "archived", "muted") and v is not None}

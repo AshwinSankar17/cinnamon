@@ -151,3 +151,18 @@ def test_health_reports_missing_binaries(brain, monkeypatch):
     assert c["sbatch"] is True  # tests put fakeslurm on PATH
     with TestClient(create_app(brain, dev_no_auth=True)) as cl:
         assert cl.get("/v1/health").json()["checks"]["providers"]["claude"] is False
+
+
+def test_old_settings_files_still_load(tmp_path):
+    import yaml
+    from brain.config import Paths, Settings, ensure_root
+    p = ensure_root(Paths(tmp_path / ".brain"))
+    p.settings.write_text(yaml.safe_dump({
+        "default_provider": "claude", "max_hot_providers": 4, "idle_exit_seconds": 300,
+        "repos": [{"id": "edit-tts", "path": "/x", "archive_policy": "full", "vault_root": "/v"}]}))
+    s = Settings.load(p)
+    assert s.repos[0].id == "edit-tts" and s.repos[0].vault_root == "/v"
+    s.save(p)
+    saved = yaml.safe_load(p.settings.read_text())
+    assert "archive_policy" not in saved["repos"][0]
+    assert "max_hot_providers" not in saved and "idle_exit_seconds" not in saved
