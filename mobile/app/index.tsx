@@ -4,7 +4,7 @@
  * and the ☰ menu and the composer share the bottom tray. Everything on screen comes from Brain (src/standup.ts).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, Vibration, View, useWindowDimensions } from 'react-native';
 import { Redirect, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -42,7 +42,6 @@ export default function StandupScreen() {
   const [say, setSay] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const roll = useRef<RollHandle>(null);
   const wipe = useRef(new Animated.Value(0)).current;
   const [wipeColor, setWipeColor] = useState<string | null>(null);
@@ -94,7 +93,7 @@ export default function StandupScreen() {
   const rollH = (rollW * 236) / 224;
   const rollPos = { left: f.ox + hx * f.s - rollW * ROLL_BASE.x, top: f.oy + hy * f.s - rollH * ROLL_BASE.y };
   const Backdrop = BACKDROPS[id];
-  const liveText = status === 'live' ? (conn.paused ? 'paused' : 'live') : s ? `as of ${Math.max(1, Math.round((Date.now() - s.asOf) / 60000))} min ago` : status;
+  const liveText = status === 'live' && !s?.stale ? (conn.paused ? 'paused' : 'live') : s ? `as of ${Math.max(1, Math.round((Date.now() - s.asOf) / 60000))} min ago` : status;
   const sayPos = at(f, SAY_AT[id][0], SAY_AT[id][1]);
   const composerTarget = s?.focus ? (showcase ? 'the thread' : s.focus.title) : null;
 
@@ -148,13 +147,12 @@ export default function StandupScreen() {
         </View>
       ) : null}
 
-      <ScrollView pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0 }} contentContainerStyle={{ paddingTop: insets.top + 10, paddingHorizontal: 18 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await reload(); setRefreshing(false); }} />}>
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, paddingTop: insets.top + 10, paddingHorizontal: 18 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, height: 44 }}>
           <Svg width={24} height={24} viewBox="0 0 24 24"><Path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8" fill="none" stroke={t.accent} strokeWidth={1.8} strokeLinecap="round" /></Svg>
           <Text style={{ flex: 1, fontFamily: display, fontSize: 23 * world.displayScale, color: t.ink }}>Cinnamon</Text>
           <View accessibilityLabel={`Brain ${liveText}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 40 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: status === 'live' ? t.finding : t.ink3 }} />
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: status === 'live' && !s?.stale ? t.finding : t.ink3 }} />
             <Text style={{ fontFamily: mono, fontSize: 11, color: t.ink2 }}>{liveText}</Text>
           </View>
         </View>
@@ -162,9 +160,9 @@ export default function StandupScreen() {
           {s ? headline(s, showcase) : err ? 'Brain is not reachable.' : ' '}
         </Text>
         <Text style={{ marginTop: 8, maxWidth: 330, fontFamily: ui, fontSize: 13.5, lineHeight: 19, color: t.ink2 }}>
-          {s ? `${showcase || !s.focus ? '' : ''}${subline(s, showcase)}` : err ?? ''}
+          {s ? subline(s, showcase) : err ?? ''}
         </Text>
-      </ScrollView>
+      </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ position: 'absolute', left: 12, right: 12, bottom: Math.max(insets.bottom, 12) }}>
         {s?.waiting ? (

@@ -25,7 +25,7 @@ export function WaitingCard({ world, t, waiting, more, live, fonts, onPress }: P
   const space = world.id === 'space';
   const ink = space ? '#E4E8F7' : world.id === 'tide' ? t.ink : '#2A1A10';
   const ink2 = space ? '#A8B0CC' : world.id === 'tide' ? t.ink2 : '#5E4636';
-  const kicker = space ? '#A9B8FF' : '#8A6F5A';
+  const kicker = space ? '#A9B8FF' : world.id === 'tide' ? t.ink2 : '#8A6F5A';
   const h = 80;
   const zig = 'M0 4Q0 0 4 0H' + (w - 4) + 'Q' + w + ' 0 ' + w + ' 4V72' +
     Array.from({ length: Math.floor(w / 12) }, (_, k) => `L${w - 6 - k * 12} 80L${w - 12 - k * 12} 72`).join('') + 'L0 72Z';
