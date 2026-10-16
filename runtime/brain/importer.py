@@ -3,11 +3,13 @@
 Only sessions whose working directory is inside the configured root and inside a git repo are listed. The cluster
 account may be shared, so the root is what keeps teammates' sessions out. Import copies the history into Brain: the
 first phone message continues it in a new native session in Brain's own config home, never in the terminal's file.
+`follow` (each scheduler minute) imports new sessions and copies in what the terminal added since.
 See docs/superpowers/specs/2026-10-15-session-import-design.md.
 """
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 import uuid
@@ -20,6 +22,7 @@ from .redact import _json_strings
 AUTOMATED_CODEX = {"codex_exec", "Claude Code"}  # `codex exec` runs and Codex started by Claude's plugin
 # ponytail: one import at a time (phone double tap + CLI); per-session locks if imports ever need to overlap
 _LOCK = threading.Lock()
+log = logging.getLogger(__name__)
 
 
 def config(settings) -> dict:
@@ -277,18 +280,23 @@ def import_session(brain, provider: str, session_id: str, provider_override: str
         return _import(brain, provider, session_id, provider_override)
 
 
-def _import(brain, provider: str, session_id: str, provider_override: str | None) -> dict:
+def _read(brain, cand: dict) -> list[dict]:
+    read = transcript.read_claude if cand["provider"] == "claude" else transcript.read_codex
+    items, _ = read(Path(cand["path"]))
+    return items
+
+
+def _import(brain, provider: str, session_id: str, provider_override: str | None, cand: dict | None = None) -> dict:
     key = f"{provider}:{session_id}"
     row = brain.db.one("SELECT id FROM threads WHERE imported_from=?", (key,))
     if row:
         return brain.thread_view(brain.thread(row["id"]))
-    cand = next((c for c in discover(brain.settings) if c["provider"] == provider and c["session_id"] == session_id), None)
+    cand = cand or next((c for c in discover(brain.settings)
+                         if c["provider"] == provider and c["session_id"] == session_id), None)
     if cand is None:
         raise KeyError(f"no importable {provider} session {session_id}")
     _learn_secrets(brain)
-    read = transcript.read_claude if provider == "claude" else transcript.read_codex
-    items, _ = read(Path(cand["path"]))
-    items, _ = brain.redactor.redact_obj(items)  # terminal transcripts can hold echoed tokens
+    items, _ = brain.redactor.redact_obj(_read(brain, cand))  # terminal transcripts can hold echoed tokens
     run_as = provider_override or provider
     t = brain.create_thread(_ensure_repo(brain, cand["repo_path"]), _title(brain, cand["title"]), "readonly", run_as)
     tid = t["id"]
@@ -299,13 +307,62 @@ def _import(brain, provider: str, session_id: str, provider_override: str | None
         brain.db.x("INSERT OR IGNORE INTO provider_sessions(thread_id, provider, native_session_id, sync_seq, updated_at,"
                    " native_seen, canon_synced) VALUES (?,?,NULL,0,?,0,?)", (tid, name, time.time(), cut))
     brain.events.append(tid, "system.notice", {"text": (
-        f"Imported {len(items)} items from your terminal session {session_id} ({cand['path']}), as of now. Your next "
-        f"message continues it here in a new session; the terminal's session is untouched and later terminal turns "
-        f"do not appear here." + (f" The model is given the last {len(items) - cut} items; the full history stays in "
+        f"Imported {len(items)} items from your terminal session {session_id} ({cand['path']}). Later terminal turns "
+        f"keep arriving here; your next message continues it here in a new session, and the terminal's session is "
+        f"untouched." + (f" The model is given the last {len(items) - cut} items; the full history stays in "
                                   f"this thread." if cut else ""))})
     # last: a failed import is never "done". updated_at is the session's own last activity, not the import time, so an
     # old session ranks below the threads actually being worked on.
-    brain.db.x("UPDATE threads SET imported_from=?, updated_at=? WHERE id=?", (key, cand["last_ts"], tid))
+    brain.db.x("UPDATE threads SET imported_from=?, updated_at=?, import_items=?, import_mtime=? WHERE id=?",
+               (key, cand["last_ts"], len(items), cand["last_ts"], tid))
     _arrive_read(brain, tid)
     brain.ir.log("import", thread=tid, source=key, items=len(items))
     return brain.thread_view(brain.thread(tid))
+
+
+def follow(brain) -> None:
+    """One pass: import sessions not seen before, and copy into each imported thread what its terminal session added.
+
+    Sources are append-only JSONL, so the items past the count already copied are the new ones (a half-written last
+    line parses as nothing until it is complete). A thread with a Brain turn running waits for the next pass."""
+    # ponytail: re-reads a changed session whole (1.1 s for a 116 MB one); keep a byte offset if that ever hurts
+    with _LOCK:
+        cands = discover(brain.settings)
+        if not cands:
+            return
+        _learn_secrets(brain)
+        have = {r["imported_from"]: dict(r) for r in
+                brain.db.q("SELECT * FROM threads WHERE imported_from IS NOT NULL")}
+        for c in cands:
+            key = f"{c['provider']}:{c['session_id']}"
+            try:
+                if key not in have:
+                    _import(brain, c["provider"], c["session_id"], None, c)
+                else:
+                    _catch_up(brain, have[key], c)
+            except Exception:  # one bad session must not stop the others
+                log.exception("follow %s failed", key)
+
+
+def _catch_up(brain, t: dict, cand: dict) -> None:
+    tid = t["id"]
+    if t["import_mtime"] is not None and cand["last_ts"] <= t["import_mtime"]:
+        return
+    task = brain._tasks.get(tid)
+    if task is not None and not task.done():
+        return
+    done = t["import_items"]
+    if done is None:  # imported before follow existed: the import wrote the only items with no turn and a provider
+        done = brain.db.one("SELECT COUNT(*) AS n FROM transcript_items WHERE thread_id=? AND turn_id IS NULL"
+                            " AND provider!='user'", (tid,))["n"]
+    items = _read(brain, cand)
+    new, _ = brain.redactor.redact_obj(items[done:])
+    if new:
+        unread = brain.thread_view(t)["unseen"]
+        brain._append_transcript(tid, cand["provider"], None, new)
+        _events(brain, tid, cand["provider"], new)
+        brain.db.x("UPDATE threads SET updated_at=?, archived=0 WHERE id=?", (cand["last_ts"], tid))
+        if not unread:  # the owner lived these turns in the terminal; an unread phone reply stays unread
+            _arrive_read(brain, tid)
+        brain.ir.log("import.follow", thread=tid, items=len(new))
+    brain.db.x("UPDATE threads SET import_items=?, import_mtime=? WHERE id=?", (len(items), cand["last_ts"], tid))

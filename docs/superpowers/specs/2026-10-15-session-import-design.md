@@ -74,6 +74,16 @@ The owner runs Claude Code (and sometimes Codex) in terminals on the cluster. Br
   - Brain must be running.
 - **App:** an Import screen, reached from the Threads tab. It lists candidates by repo with the title, last active time, "open in a terminal" when live, and Import or Open.
 
+## Follow (added 2026-10-16)
+
+- Every 60 s the scheduler runs `importer.follow`:
+  - it imports any listed session not imported yet;
+  - for each imported thread whose source file changed, it copies in the items past `threads.import_items`, redacted, as history events.
+- Copied turns arrive read unless the thread already had an unread reply, and an archived thread comes back.
+- A thread with a Brain turn running waits for the next pass.
+- Threads imported before this change count their imported items from the transcript: those with no turn and a provider other than `user`.
+- Phone messages never reach the terminal's session.
+
 ## Safety
 
 - **Files read:** only the configured profile folders and only sessions under `root`. Nothing outside `root` is ever listed.
@@ -84,5 +94,4 @@ The owner runs Claude Code (and sometimes Codex) in terminals on the cluster. Br
 ## Not doing
 
 - Antigravity.
-- Live mirroring of a session that keeps growing in the terminal. A later re-import could append; it is not needed now.
 - Importing sessions outside git repos.

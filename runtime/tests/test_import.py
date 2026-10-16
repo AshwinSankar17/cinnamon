@@ -321,3 +321,114 @@ def test_one_unreadable_file_does_not_break_the_listing(owner, brain):
     (owner["profile"] / "projects" / "x").mkdir(parents=True, exist_ok=True)
     (owner["profile"] / "projects" / "x" / "dangling.jsonl").symlink_to(owner["root"] / "nowhere.jsonl")
     assert [c["session_id"] for c in importer.discover(brain.settings)] == ["r9"]
+
+
+# ---- follow: terminal sessions keep arriving -----------------------------------------------------
+def _grow(f: Path, sid: str, cwd: Path, *texts: str, raw: str = "") -> None:
+    """The terminal adds a turn per text (owner asks, agent answers); `raw` is appended as is (a half-written line)."""
+    with f.open("a") as fh:
+        for t in texts:
+            fh.write(json.dumps({"type": "user", "cwd": str(cwd), "sessionId": sid,
+                                 "message": {"role": "user", "content": t}}) + "\n")
+            fh.write(json.dumps({"type": "assistant", "cwd": str(cwd), "sessionId": sid,
+                                 "message": {"role": "assistant", "content": [{"type": "text", "text": f"re: {t}"}]}}) + "\n")
+        fh.write(raw)
+    later = time.time() + 5 + len(f.read_text())  # a strictly newer mtime on every growth
+    os.utime(f, (later, later))
+
+
+def _texts(brain, tid: str) -> list[str]:
+    return [i.get("text") for i in brain.transcript(tid)]
+
+
+def test_a_growing_session_adds_only_the_new_part(owner, brain):
+    f = _claude_session(owner["profile"], owner["repo"], "f1")
+    t = importer.import_session(brain, "claude", "f1", provider_override="fake")
+    _grow(f, "f1", owner["repo"], "and now eval")
+    importer.follow(brain)
+    assert _texts(brain, t["id"]) == ["train the model", "Submitted job 42.", "and now eval", "re: and now eval"]
+    msgs = [e["payload"]["text"] for e in brain.events.replay(t["id"], 0, 200) if e["type"] == "user.message"]
+    assert msgs == ["train the model", "and now eval"]
+    seq = brain.events.last_seq(t["id"])
+    importer.follow(brain)  # nothing new: nothing added
+    assert brain.events.last_seq(t["id"]) == seq and len(brain.transcript(t["id"])) == 4
+
+
+def test_a_half_written_line_arrives_once_complete(owner, brain):
+    f = _claude_session(owner["profile"], owner["repo"], "f2")
+    t = importer.import_session(brain, "claude", "f2", provider_override="fake")
+    line = json.dumps({"type": "user", "cwd": str(owner["repo"]), "sessionId": "f2",
+                       "message": {"role": "user", "content": "half"}})
+    _grow(f, "f2", owner["repo"], raw=line[:20])
+    importer.follow(brain)
+    assert len(brain.transcript(t["id"])) == 2
+    _grow(f, "f2", owner["repo"], raw=line[20:] + "\n")
+    importer.follow(brain)
+    assert _texts(brain, t["id"])[2:] == ["half"]
+
+
+def test_follow_waits_while_a_brain_turn_runs(owner, brain):
+    import asyncio
+    f = _claude_session(owner["profile"], owner["repo"], "f3")
+    t = importer.import_session(brain, "claude", "f3", provider_override="fake")
+    busy = asyncio.get_event_loop_policy().new_event_loop().create_future()
+    brain._tasks[t["id"]] = busy
+    _grow(f, "f3", owner["repo"], "meanwhile")
+    importer.follow(brain)
+    assert len(brain.transcript(t["id"])) == 2
+    busy.cancel()
+    importer.follow(brain)
+    assert _texts(brain, t["id"])[2:] == ["meanwhile", "re: meanwhile"]
+
+
+def test_followed_turns_arrive_read_and_bring_the_thread_back(owner, brain):
+    f = _claude_session(owner["profile"], owner["repo"], "f4")
+    t = importer.import_session(brain, "claude", "f4", provider_override="fake")
+    brain.db.x("UPDATE threads SET archived=1 WHERE id=?", (t["id"],))
+    _grow(f, "f4", owner["repo"], "back at it")
+    importer.follow(brain)
+    v = brain.thread_view(brain.thread(t["id"]))
+    assert v["unseen"] is False and v["archived"] is False
+    assert abs(v["updated_at"] - f.stat().st_mtime) < 1  # ranks by the terminal's activity
+
+
+def test_new_sessions_are_imported_automatically(owner, brain):
+    brain.providers["claude"] = brain.providers["fake"]
+    _claude_session(owner["profile"], owner["repo"], "f5", title="Started in the terminal")
+    importer.follow(brain)
+    (c,) = importer.candidates(brain)
+    assert c["thread_id"] and brain.thread(c["thread_id"])["title"] == "Started in the terminal"
+
+
+def test_threads_imported_before_follow_pick_up_where_they_stopped(owner, brain):
+    f = _claude_session(owner["profile"], owner["repo"], "f6")
+    t = importer.import_session(brain, "claude", "f6", provider_override="fake")
+    brain._append_transcript(t["id"], "user", "turn_x", [{"k": "user", "text": "from the phone"}])  # Brain's own turn
+    brain.db.x("UPDATE threads SET import_items=NULL, import_mtime=NULL WHERE id=?", (t["id"],))  # an old import
+    _grow(f, "f6", owner["repo"], "terminal again")
+    importer.follow(brain)
+    assert _texts(brain, t["id"]) == ["train the model", "Submitted job 42.", "from the phone",
+                                      "terminal again", "re: terminal again"]
+
+
+async def test_the_next_phone_message_hands_the_model_the_terminal_work(owner, brain):
+    from test_flows import _settle
+    f = _claude_session(owner["profile"], owner["repo"], "f7")
+    t = importer.import_session(brain, "claude", "f7", provider_override="fake")
+    await brain.send_message(t["id"], "hello from the phone")
+    await _settle(brain, t["id"])
+    _grow(f, "f7", owner["repo"], "did this in the terminal")
+    importer.follow(brain)
+    await brain.send_message(t["id"], "what did I just do?")
+    await _settle(brain, t["id"])
+    assert [i.get("text") for i in brain.providers["fake"].hydrated[-1]] == ["did this in the terminal",
+                                                                             "re: did this in the terminal"]
+
+
+async def test_the_scheduler_follows_at_most_once_a_minute(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(importer, "follow", lambda b: calls.append(b))
+    await brain.tick()
+    await brain.tick()
+    assert calls == [brain]
+
