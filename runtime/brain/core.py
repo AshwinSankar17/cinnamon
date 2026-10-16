@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from . import repos, slurm, transcript
+from . import importer, repos, slurm, transcript
 from .audit import AuditWriter, IRLog
 from .config import SITE_DISABLED_FLAG, Paths, Settings
 from .db import DB, row_dict
@@ -29,6 +29,7 @@ from .webpush import WebPush
 from .redact import SecretRegistry
 
 log = logging.getLogger("brain")
+FOLLOW_S = 60  # how often terminal sessions are checked for new turns and new sessions
 
 SYSTEM_APPEND = (
     "You are running under Cluster Brain on a shared HPC cluster. The owner is usually away from the "
@@ -119,6 +120,7 @@ class Brain:
         self.backfill_seen()
         self.watcher = slurm.Watcher()
         self._tasks: dict[str, asyncio.Task] = {}
+        self._followed_at = float("-inf")
         self._turn_counts: dict[str, dict[str, int]] = {}
         # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
         self._queued: dict[str, list[tuple[str, str]]] = {}
@@ -1024,8 +1026,11 @@ class Brain:
         return out
 
     async def tick(self, force: bool = False) -> None:
-        """One scheduler pass: job states, wait conditions, wakes, idle-thread expiry."""
+        """One scheduler pass: job states, wait conditions, wakes, idle-thread expiry, terminal sessions."""
         self.expire_threads()
+        if time.monotonic() - self._followed_at >= FOLLOW_S:
+            self._followed_at = time.monotonic()
+            await asyncio.to_thread(importer.follow, self)
         self._flush_digest()
         jobs = [dict(r) for r in self.db.q("SELECT * FROM jobs WHERE state NOT IN (%s)" %
                                            ",".join("?" * len(slurm.TERMINAL)), list(slurm.TERMINAL))]
