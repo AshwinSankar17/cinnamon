@@ -1,8 +1,10 @@
 """One session for the terminal and the phone, one writer at a time (session-import spec, "Shared session")."""
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -243,19 +245,62 @@ async def test_a_busy_session_outside_tmux_holds_until_idle(linked, brain, termi
     assert brain.providers["claude"].prompts == ["when you can"] and terminal_proc.wait(timeout=5) is not None
 
 
-async def test_a_background_session_is_stopped_with_claude_stop(linked, brain, terminal_proc, monkeypatch):
+@pytest.mark.parametrize("status", ["idle", "shell", "busy"])
+async def test_a_background_session_gets_the_message_through_attach(linked, brain, terminal_proc, monkeypatch, status):
     monkeypatch.setattr(importer, "_pane", lambda rec: None)
-    stopped = []
-
-    def fake_stop(profile, job):
-        stopped.append((profile, job))
-        terminal_proc.kill()
-    monkeypatch.setattr(importer, "_claude_stop", fake_stop)
-    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="idle", kind="bg", jobId="ab12cd34")
+    sent = []
+    monkeypatch.setattr(importer, "_attach_paste", lambda profile, job, text: sent.append((profile, job, text)) or True)
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status=status, kind="bg", jobId="ab12cd34")
     await brain.send_message(linked["tid"], "go on")
-    await _settle(brain, linked["tid"])
-    assert stopped == [(linked["profile"], "ab12cd34")]
-    assert any("claude attach ab12cd34" in n for n in _notices(brain, linked["tid"]))
+    assert sent == [(linked["profile"], "ab12cd34", "go on")]
+    assert terminal_proc.poll() is None and brain.providers["claude"].prompts == []  # nothing stopped, nothing run
+
+
+async def test_a_background_session_at_a_prompt_holds(linked, brain, terminal_proc, monkeypatch):
+    monkeypatch.setattr(importer, "_pane", lambda rec: None)
+    monkeypatch.setattr(importer, "_attach_paste", lambda *a: pytest.fail("typed into a prompt"))
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="waiting", kind="bg", jobId="ab12cd34")
+    await brain.send_message(linked["tid"], "go on")
+    assert brain._queued[linked["tid"]] and terminal_proc.poll() is None
+
+
+@pytest.fixture
+def attach_sock(monkeypatch):
+    d = Path(tempfile.mkdtemp(prefix="ba", dir="/tmp"))  # a Unix socket path must stay short; pytest's are long
+    monkeypatch.setattr(importer, "ATTACH_SOCK", d / "s")
+    yield d / "s"
+    subprocess.run(["tmux", "-S", str(d / "s"), "kill-server"], capture_output=True)
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def test_attach_types_into_a_hidden_window_and_closes_it(tmp_path, monkeypatch, attach_sock):
+    """A stand-in `claude` that draws an input box and records what is typed: the real tmux does the rest."""
+    got = tmp_path / "got.txt"
+    fake = tmp_path / "bin" / "claude"
+    fake.parent.mkdir()
+    box = f"{RULE}\n❯\xa0\n{RULE}"
+    fake.write_text(f"""#!{sys.executable}
+import sys
+print({box!r}, flush=True)
+open({str(got)!r}, "w").write(" ".join(sys.argv[1:]) + "|" + sys.stdin.readline())
+""")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake.parent}:{os.environ['PATH']}")
+    assert importer._attach_paste(tmp_path / "profile", "ab12cd34", "go on") is True
+    assert got.read_text() == "attach ab12cd34|go on\n"
+    gone = subprocess.run(["tmux", "-S", str(attach_sock), "has-session", "-t", "a-ab12cd34"],
+                          capture_output=True)
+    assert gone.returncode != 0
+
+
+def test_attach_that_never_shows_an_input_box_holds(tmp_path, monkeypatch, attach_sock):
+    fake = tmp_path / "bin" / "claude"
+    fake.parent.mkdir()
+    fake.write_text(f"#!{sys.executable}\nimport time\nprint('Do you want to proceed?', flush=True)\ntime.sleep(30)\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake.parent}:{os.environ['PATH']}")
+    monkeypatch.setattr(importer, "ATTACH_WAIT_S", 1.0)
+    assert importer._attach_paste(tmp_path / "profile", "ab12cd34", "go on") is False
 
 
 # ---- watching the file --------------------------------------------------------------------------

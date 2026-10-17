@@ -587,9 +587,12 @@ def route(t: dict) -> tuple[str, tuple | None]:
     rec = _open(t)
     if rec is None:
         return "run", None
+    ready = "deliver" if rec.get("status") in RELAY_STATUS else "hold"
     pane = _pane(rec)
     if pane:
-        return ("deliver" if rec.get("status") in RELAY_STATUS else "hold"), ("pane", *pane)
+        return ready, ("pane", *pane)
+    if rec.get("kind") == "bg" and rec.get("jobId"):  # no terminal of its own: open one to type into
+        return ready, ("attach", profile_of(t), rec["jobId"])
     return ("run" if rec.get("status") == "idle" else "hold"), None
 
 
@@ -605,6 +608,8 @@ def deliver(brain, t: dict, target: tuple, text: str) -> bool:
             ok = _box_empty(_screen(sock, pane), GLYPH[provider])
             if ok:
                 _paste(sock, pane, _literal(provider, text))
+        elif kind == "attach":
+            ok = _attach_paste(target[1], target[2], text)
         else:
             raise ValueError(f"unknown delivery {kind}")
     except Exception:
@@ -640,9 +645,31 @@ def unconfirmed(brain) -> None:
             brain._relayed.pop(tid, None)
 
 
-def _claude_stop(profile: Path, job: str) -> None:
-    subprocess.run([shutil.which("claude") or "claude", "stop", job], env={**os.environ, "CLAUDE_CONFIG_DIR": str(profile)},
-                   capture_output=True, check=True, timeout=60)
+ATTACH_SOCK = Path(os.environ.get("TMUX_TMPDIR", "/tmp")) / f"tmux-{os.getuid()}" / "brain-attach"
+ATTACH_WAIT_S = 10.0
+
+
+def _attach_paste(profile: Path, job: str, text: str) -> bool:
+    """Type into a background session: open it with `claude attach` in a hidden tmux window, type once its input
+    box is empty, close the window. The session keeps running (observed with 2.1.302)."""
+    sock, name = str(ATTACH_SOCK), f"a-{job}"
+    ATTACH_SOCK.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tm = ["tmux", "-S", sock]
+    subprocess.run([*tm, "kill-session", "-t", name], capture_output=True, timeout=10)  # one left from a crash
+    subprocess.run([*tm, "new-session", "-d", "-s", name, "-x", "200", "-y", "50", "env",
+                    f"CLAUDE_CONFIG_DIR={profile}", shutil.which("claude") or "claude", "attach", job],
+                   check=True, capture_output=True, timeout=10)
+    try:
+        end = time.time() + ATTACH_WAIT_S
+        while time.time() < end:
+            if _box_empty(_screen(sock, name), GLYPH["claude"]):
+                _paste(sock, name, _literal("claude", text))
+                time.sleep(1.5)  # submitted before the window goes
+                return True
+            time.sleep(0.25)
+        return False
+    finally:
+        subprocess.run([*tm, "kill-session", "-t", name], capture_output=True, timeout=10)
 
 
 def take_over(t: dict) -> str | None:
@@ -652,13 +679,11 @@ def take_over(t: dict) -> str | None:
         return None
     if rec.get("status") != "idle":
         raise RuntimeError("your terminal is working in this session; send again when it is idle")
+    if rec.get("kind") == "bg":  # messages reach it through `claude attach`; never stopped to run here
+        raise RuntimeError("your background session has this open; the message goes to it instead")
     sid = t["imported_from"].split(":", 1)[1]
-    if rec.get("kind") == "bg" and rec.get("jobId"):
-        _claude_stop(profile_of(t), rec["jobId"])
-        note = f"Stopped your background session {rec['jobId']} to run this here. Reopen it with: claude attach {rec['jobId']}"
-    else:
-        os.kill(int(rec["pid"]), signal.SIGTERM)
-        note = f"Closed your idle terminal session (pid {rec['pid']}) to run this here. Pick it up with: claude --resume {sid}"
+    os.kill(int(rec["pid"]), signal.SIGTERM)
+    note = f"Closed your idle terminal session (pid {rec['pid']}) to run this here. Pick it up with: claude --resume {sid}"
     for _ in range(100):
         if _open(t) is None:
             return note
