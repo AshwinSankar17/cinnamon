@@ -153,6 +153,7 @@ async def test_a_half_typed_draft_is_never_merged_with_the_message(linked, brain
     (EMPTY, "❯", True),
     (EMPTY.replace("❯\xa0", '❯\xa0Try "write a test for <filepath>"'), "❯", True),  # the placeholder
     (EMPTY.replace("❯\xa0", "❯\xa0ab"), "❯", False),
+    (f"{'─' * 30} bg1 reply ─\n❯\xa0\n{RULE}\n  ⏵⏵ auto mode on", "❯", True),  # a named session labels the rule
     (EMPTY.replace("❯\xa0", "!\xa0"), "❯", False),  # shell mode
     (f"{RULE}\n❯\xa0line one\n  line two\n{RULE}", "❯", False),
     (" Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Esc to cancel", "❯", False),  # a dialog, no input box

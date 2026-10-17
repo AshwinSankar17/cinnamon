@@ -13,12 +13,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
 import threading
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from . import repos, transcript
@@ -172,33 +174,65 @@ def _codex_one(f: Path, cutoff: float) -> dict | None:
             "title": title or "Imported Codex session", "last_ts": mtime, "live": _holder(_codex_lock(f, sid)) is not None}
 
 
+def _agy_first(f: Path) -> tuple[str | None, float | None]:
+    """The conversation's first user message and when it was sent."""
+    with f.open(errors="replace") as fh:
+        for line in fh:
+            try:
+                st = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if st.get("type") == "USER_INPUT":
+                m = re.search(r"<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>", st.get("content") or "", re.S)
+                try:
+                    at = datetime.fromisoformat(st["created_at"].replace("Z", "+00:00")).timestamp()
+                except (KeyError, ValueError, AttributeError):
+                    at = None
+                return (m.group(1) if m else st.get("content")), at
+    return None, None
+
+
 def _agy(profile: Path, cutoff: float) -> list[dict]:
-    """Conversations the owner typed into agy's terminal UI (its history.jsonl names their workspace; headless
-    `agy -p` runs are not in it). <profile>/brain/<conv>/.system_generated/logs/transcript_full.jsonl holds each."""
-    ws = {}
+    """Conversations the owner typed into agy's terminal UI: its history.jsonl names their workspace (headless
+    `agy -p` runs are not in it). A conversation's first prompt is logged before agy names the conversation, so
+    one with a single prompt is matched by that prompt's text and time. Each lives in
+    <profile>/brain/<conv>/.system_generated/logs/transcript_full.jsonl."""
+    ws, first = {}, []
     try:
         for line in (profile / "history.jsonl").read_text(errors="replace").splitlines():
             try:
                 h = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if h.get("conversationId") and h.get("workspace"):
+            if not h.get("workspace"):
+                continue
+            if h.get("conversationId"):
                 ws[h["conversationId"]] = h["workspace"]
+            elif h.get("display") and h.get("type") != "slash_command":
+                first.append((h["display"].strip(), h.get("timestamp", 0) / 1000, h["workspace"]))
     except OSError:
         return []
     out = []
-    for conv, cwd in ws.items():
-        f = profile / "brain" / conv / ".system_generated" / "logs" / "transcript_full.jsonl"
+    for d in (profile / "brain").glob("*"):
+        f = d / ".system_generated" / "logs" / "transcript_full.jsonl"
         try:
             mtime = f.stat().st_mtime
             if mtime < cutoff:
                 continue
-            title = next((i["text"] for i in transcript.read_agy(f)[0] if i["k"] == "user"), None)
+            title, at = _agy_first(f)
         except (OSError, UnicodeDecodeError):
             continue
-        out.append({"provider": "agy", "session_id": conv, "path": str(f), "cwd": cwd, "last_ts": mtime,
-                    "title": (title or "Imported agy session")[:2000],
-                    "live": _holder(profile / "presence" / f"{conv}.lock") is not None})
+        cwd = ws.get(d.name)
+        if not cwd and title and at is not None:
+            near = [x for x in first if x[0] == title.strip() and abs(x[1] - at) < 120]
+            if near:  # each logged prompt names one conversation: the closest in time
+                hit = min(near, key=lambda x: abs(x[1] - at))
+                first.remove(hit)
+                cwd = hit[2]
+        if cwd:
+            out.append({"provider": "agy", "session_id": d.name, "path": str(f), "cwd": cwd, "last_ts": mtime,
+                        "title": (title or "Imported agy session")[:2000],
+                        "live": _holder(profile / "presence" / f"{d.name}.lock") is not None})
     return out
 
 
@@ -662,7 +696,10 @@ def _box_empty(screen: str, glyph: str) -> bool:
     """The TUI's input box (the lines between the last two rules) is one line: its prompt glyph and nothing typed.
     A draft, shell mode (`!` instead of the glyph) or a dialog in its place means typing now would go wrong."""
     lines = screen.rstrip("\n").splitlines()
-    rules = [i for i, l in enumerate(lines) if l.strip() and set(l.strip()) == {"─"}]
+    def rule(l: str) -> bool:  # a named session writes its name into the rule: "──── bg1 reply ─"
+        x = l.strip()
+        return len(x) > 10 and x[0] == x[-1] == "─" and x.count("─") * 2 > len(x)
+    rules = [i for i, l in enumerate(lines) if rule(l)]
     if len(rules) < 2 or rules[-1] - rules[-2] != 2:
         return False
     box = lines[rules[-2] + 1].replace("\xa0", " ").strip()

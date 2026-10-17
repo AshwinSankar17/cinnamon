@@ -135,17 +135,21 @@ async def test_codex_runs_pass_the_hook_as_a_flag_and_write_no_file(tmp_path):
 
 
 # ---- agy ----------------------------------------------------------------------------------------
-def _agy_conv(profile: Path, cwd: Path, conv: str, typed: bool = True) -> Path:
+def _agy_conv(profile: Path, cwd: Path, conv: str, typed: bool = True, named: bool = True,
+              at: str = "2026-10-17T18:26:57Z") -> Path:
     f = profile / "brain" / conv / ".system_generated" / "logs" / "transcript_full.jsonl"
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text("\n".join(json.dumps(r) for r in [
-        {"step_index": 0, "type": "USER_INPUT", "content": "<USER_REQUEST>\nsweep the lr\n</USER_REQUEST>"},
+        {"step_index": 0, "type": "USER_INPUT", "created_at": at,
+         "content": "<USER_REQUEST>\nsweep the lr\n</USER_REQUEST>"},
         {"step_index": 1, "type": "PLANNER_RESPONSE", "content": "Sweeping."},
     ]) + "\n")
     if typed:  # the TUI records what the owner typed; headless `agy -p` runs are not listed there
-        with (profile / "history.jsonl").open("a") as h:
-            h.write(json.dumps({"display": "sweep the lr", "timestamp": 1, "workspace": str(cwd),
-                                "conversationId": conv, "type": "prompt"}) + "\n")
+        h = {"display": "sweep the lr", "timestamp": 1792261613000, "workspace": str(cwd)}  # 2026-10-17T18:26:53Z
+        if named:  # agy logs a conversation's first prompt before it names the conversation
+            h["conversationId"] = conv
+        with (profile / "history.jsonl").open("a") as fh:
+            fh.write(json.dumps(h) + "\n")
     return f
 
 
@@ -171,11 +175,13 @@ def test_agy_sessions_typed_in_the_terminal_are_listed(owner, brain, tmp_path):
     prof = tmp_path / "agyprof"
     brain.settings.raw["import"]["agy_dirs"] = [str(prof)]
     _agy_conv(prof, owner["repo"], "G2")
-    _agy_conv(prof, owner["repo"], "G-headless", typed=False)
+    _agy_conv(prof, owner["repo"], "G-headless", typed=False, at="2026-10-17T18:40:00Z")
+    _agy_conv(prof, owner["repo"], "G-first", named=False)  # one prompt so far: matched by its text and time
     found = importer.discover(brain.settings)
-    assert [(c["provider"], c["session_id"], c["title"], c["live"]) for c in found] == [("agy", "G2", "sweep the lr", False)]
+    assert sorted((c["provider"], c["session_id"], c["title"], c["live"]) for c in found) == [
+        ("agy", "G-first", "sweep the lr", False), ("agy", "G2", "sweep the lr", False)]
     with held(prof / "presence" / "G2.lock"):
-        assert importer.discover(brain.settings)[0]["live"] is True
+        assert {c["session_id"]: c["live"] for c in importer.discover(brain.settings)}["G2"] is True
 
 
 def test_an_agy_import_shares_the_terminal_session(ag, brain):
