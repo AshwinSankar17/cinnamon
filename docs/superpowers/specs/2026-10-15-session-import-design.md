@@ -84,6 +84,29 @@ The owner runs Claude Code (and sometimes Codex) in terminals on the cluster. Br
 - Threads imported before this change count their imported items from the transcript: those with no turn and a provider other than `user`.
 - Phone messages never reach the terminal's session.
 
+## Shared session, single writer (added 2026-10-17)
+
+A thread imported from a Claude terminal session (and run by Claude) is *linked*: the thread and the terminal use one
+session file, `threads.import_path`, in the owner's profile. Exactly one process writes it at a time:
+
+| Where the session is | A phone message | Brain's own wakes (job done, etc.) |
+|---|---|---|
+| Open in a tmux pane, status `idle` or `busy` | pasted into that pane (bracketed paste, then Enter); the terminal runs it | held |
+| Open in a tmux pane, any other status (a permission prompt, a shell) | held until it is `idle`/`busy` | held |
+| Open elsewhere: background session, or idle interactive | Brain takes over: `claude stop <job id>` or SIGTERM, then runs it | the same |
+| Open elsewhere and busy | held until idle | held |
+| Closed | Brain runs `claude -p --resume <id>` with `CLAUDE_CONFIG_DIR` = the owner's profile | the same |
+
+- **Paste safety:** Brain pastes only into the pane recorded in `<profile>/sessions/<pid>.json`, and only when that pane's shell is an ancestor of the session's pid.
+- **Watching the file:** Brain checks the linked file every second and reads only the bytes past `threads.import_offset`, so a 100 MB session costs nothing when it is quiet.
+- **Pasted messages:** they arrive back from the file. The user.message the phone already shows is not repeated.
+- **Brain-run turns:** they are ingested as before, then the offset moves to the file's end.
+- **Linking an older thread:** the `claude` provider session is pointed at the terminal session (`native_seen` = its non-user items, `canon_synced` = the transcript length). Phone turns from before the link stay in the app only.
+- **Not covered:**
+  - Two writers at once: a terminal opened during a Brain-run turn.
+  - Approvals for pasted turns: the terminal's own permission mode applies.
+  - Codex sessions: they stay one-way.
+
 ## Safety
 
 - **Files read:** only the configured profile folders and only sessions under `root`. Nothing outside `root` is ever listed.

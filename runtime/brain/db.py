@@ -224,6 +224,8 @@ MIGRATIONS = [
     ("threads", "seen_at", "REAL"),                                       # when the owner last opened it (read marker)
     ("threads", "import_items", "INTEGER"),                               # source transcript items already copied in
     ("threads", "import_mtime", "REAL"),                                  # the source file's mtime when last copied
+    ("threads", "import_path", "TEXT"),                                   # a Claude source: its session file
+    ("threads", "import_offset", "INTEGER"),                              # a Claude source: bytes already copied in
 ]
 
 

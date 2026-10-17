@@ -27,15 +27,21 @@ def _text(content) -> str:
     return "\n".join(x.get("text", "") for x in content or [] if isinstance(x, dict))
 
 
-def read_claude(path: Path) -> tuple[list[dict], int]:
+def _claude_items(lines, queued: bool = True) -> tuple[list[dict], int]:
+    """Items of Claude Code session lines. queued: include messages typed while a turn ran (`queued_command`
+    attachments); older imports were counted without them."""
     items, dropped = [], 0
-    for line in path.read_text().splitlines():
+    for line in lines:
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
             continue
         t, content = rec.get("type"), (rec.get("message") or {}).get("content")
-        if t == "user" and not rec.get("isMeta"):
+        if t == "attachment" and queued:
+            a = rec.get("attachment") or {}
+            if a.get("type") == "queued_command" and a.get("commandMode", "prompt") == "prompt" and isinstance(a.get("prompt"), str):
+                items.append({"k": "user", "text": a["prompt"]})
+        elif t == "user" and not rec.get("isMeta"):
             if isinstance(content, str):
                 items.append({"k": "user", "text": content})
                 continue
@@ -56,6 +62,33 @@ def read_claude(path: Path) -> tuple[list[dict], int]:
                 elif b.get("type") in ("thinking", "redacted_thinking"):
                     dropped += 1
     return items, dropped
+
+
+def read_claude(path: Path) -> tuple[list[dict], int]:
+    return _claude_items(path.read_text().splitlines())
+
+
+def read_claude_from(path: Path, offset: int) -> tuple[list[dict], int]:
+    """Items in the complete lines past byte `offset`, and the offset after them (a half-written line waits)."""
+    with path.open("rb") as f:
+        f.seek(offset)
+        data = f.read()
+    end = data.rfind(b"\n") + 1
+    return _claude_items(data[:end].decode(errors="replace").splitlines())[0], offset + end
+
+
+def claude_offset_after(path: Path, n: int) -> int:
+    """Byte offset just past the line that brings the item count (counted the old way) to n."""
+    off, seen = 0, 0
+    with path.open("rb") as f:
+        for line in f:
+            if seen >= n:
+                break
+            if not line.endswith(b"\n"):
+                break
+            seen += len(_claude_items([line.decode(errors="replace")], queued=False)[0])
+            off += len(line)
+    return off
 
 
 def read_codex(path: Path) -> tuple[list[dict], int]:
