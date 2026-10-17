@@ -123,6 +123,7 @@ class Brain:
         self._followed_at = float("-inf")
         self._relayed: dict[str, list[tuple[str, float]]] = {}  # phone messages typed into a terminal, not yet back from its file
         self._import_turns: dict[str, dict] = {}  # a terminal turn still being written (see importer._settle)
+        self._delivering: set[str] = set()  # threads whose held messages are being handed to their terminal
         self._turn_counts: dict[str, dict[str, int]] = {}
         # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
         self._queued: dict[str, list[tuple[str, str]]] = {}
@@ -510,18 +511,31 @@ class Brain:
             if where == "hold":
                 return
             if where == "deliver":  # messages go to the open terminal; Brain's own wakes wait for it to close
-                queued = self._queued[thread_id]
-                texts = [x for k, x in queued if k == "user"]
-                if texts and importer.deliver(self, t, target, "\n\n".join(texts)):
-                    self._queued[thread_id] = [q for q in queued if q[0] == "wake"]
-                    if not self._queued[thread_id]:
-                        del self._queued[thread_id]
+                if thread_id not in self._delivering and any(k == "user" for k, _ in self._queued[thread_id]):
+                    self._delivering.add(thread_id)
+                    asyncio.get_running_loop().create_task(self._deliver_held(thread_id, t, target))
                 return
         queued = self._queued.pop(thread_id, [])
         if queued:
             woken = all(k == "wake" for k, _ in queued)
             self._start(thread_id, "\n\n".join(text for _, text in queued),
                         wake_reason="wait fired" if woken else None)
+
+    async def _deliver_held(self, thread_id: str, t: dict, target: tuple) -> None:
+        """Hand held messages to the open terminal off the event loop (`claude attach` can take seconds)."""
+        try:
+            texts = [x for k, x in self._queued.get(thread_id, []) if k == "user"]
+            if texts and await asyncio.to_thread(importer.deliver, self, t, target, "\n\n".join(texts)):
+                left = list(self._queued.get(thread_id, []))
+                for x in texts:  # only what was handed over; one sent meanwhile goes on the next pass
+                    if ("user", x) in left:
+                        left.remove(("user", x))
+                if left:
+                    self._queued[thread_id] = left
+                else:
+                    self._queued.pop(thread_id, None)
+        finally:
+            self._delivering.discard(thread_id)
 
     async def stop(self, thread_id: str, reason: str = "Stopped from the phone", keep_queue: bool = False) -> list[str]:
         """Stop the running turn. Like Esc in Claude Code, messages queued behind it are not sent: they are

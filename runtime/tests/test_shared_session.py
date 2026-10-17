@@ -48,6 +48,15 @@ def tmux(monkeypatch):
     return sent
 
 
+async def _delivered(brain):
+    """A held message is handed to the terminal off the event loop: wait for that to finish."""
+    import asyncio
+    for _ in range(100):
+        if not brain._delivering:
+            return
+        await asyncio.sleep(0.02)
+
+
 def _notices(brain, tid):
     return [e["payload"]["text"] for e in brain.events.replay(tid, 0, 500) if e["type"] == "system.notice"]
 
@@ -129,6 +138,7 @@ async def test_a_pane_at_a_prompt_or_shell_waits_until_it_is_free(linked, brain,
     assert tmux == [] and brain._queued[linked["tid"]]
     _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
     await brain.tick()
+    await _delivered(brain)
     assert [x[2] for x in tmux] == ["next step"] and not brain._queued.get(linked["tid"])
     assert rec.exists()
 
@@ -146,6 +156,7 @@ async def test_a_half_typed_draft_is_never_merged_with_the_message(linked, brain
     assert tmux == [] and brain._queued[linked["tid"]]
     monkeypatch.setattr(importer, "_screen", lambda sock, pane: EMPTY)
     await brain.tick()
+    await _delivered(brain)
     assert [x[2] for x in tmux] == ["next step"] and not brain._queued.get(linked["tid"])
 
 
@@ -351,3 +362,36 @@ def test_a_terminal_turn_written_over_several_passes_stays_one_turn(linked, brai
     ends = [e for e in brain.events.replay(tid, 0, 500) if e["type"] == "turn.ended" and e["turn_id"] == tail[1]["turn_id"]]
     assert len(ends) == 1 and ends[0]["payload"]["text"] == "step 2"
     assert rec.exists()
+
+
+async def test_a_slow_delivery_never_blocks_brain(linked, brain, terminal_proc, monkeypatch):
+    import asyncio
+    import threading
+    monkeypatch.setattr(importer, "_pane", lambda rec: None)
+    gate, sent = threading.Event(), []
+
+    def slow(profile, job, text):  # `claude attach` taking its time to show the input box
+        gate.wait(5)
+        sent.append(text)
+        return True
+    monkeypatch.setattr(importer, "_attach_paste", slow)
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="waiting", kind="bg", jobId="ab12cd34")
+    await brain.send_message(linked["tid"], "held one")
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="idle", kind="bg", jobId="ab12cd34")
+    await asyncio.wait_for(brain.tick(), 2)  # returns while the delivery is still waiting
+    await asyncio.wait_for(brain.tick(), 2)  # and does not start a second one for the same thread
+    gate.set()
+    for _ in range(50):
+        if not brain._queued.get(linked["tid"]):
+            break
+        await asyncio.sleep(0.05)
+    assert sent == ["held one"] and not brain._queued.get(linked["tid"])
+
+
+async def test_a_delivery_that_fails_holds_the_message(linked, brain, tmux, monkeypatch):
+    def broken(sock, pane, text):
+        raise subprocess.CalledProcessError(1, "tmux")
+    monkeypatch.setattr(importer, "_paste", broken)
+    _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
+    await brain.send_message(linked["tid"], "try me")
+    assert brain._queued[linked["tid"]] == [("user", "try me")] and not brain._relayed.get(linked["tid"])

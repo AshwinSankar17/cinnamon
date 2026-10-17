@@ -769,9 +769,10 @@ def deliver(brain, t: dict, target: tuple, text: str) -> bool:
             ok = True
         else:
             raise ValueError(f"unknown delivery {kind}")
-    except Exception:
+    except Exception:  # tmux or codex failed: hold it and try again on the next pass
         sent.remove(entry)
-        raise
+        log.exception("delivery to the terminal of %s failed", t["id"])
+        return False
     if not ok:
         sent.remove(entry)
     else:
