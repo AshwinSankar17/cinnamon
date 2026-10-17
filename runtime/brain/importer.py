@@ -1,4 +1,4 @@
-"""Pick up the owner's own terminal agent sessions (Claude Code, Codex) as Brain threads.
+"""Pick up the owner's own terminal agent sessions (Claude Code, Codex, agy) as Brain threads.
 
 Only sessions whose working directory is inside the configured root and inside a git repo are listed. The cluster
 account may be shared, so the root is what keeps teammates' sessions out. Import copies the history into Brain.
@@ -34,7 +34,8 @@ log = logging.getLogger(__name__)
 def config(settings) -> dict:
     c = settings.raw.get("import") or {}
     return {"root": c.get("root"), "claude_dirs": list(c.get("claude_dirs") or []),
-            "codex_dirs": list(c.get("codex_dirs") or []), "days": float(c.get("days", 30))}
+            "codex_dirs": list(c.get("codex_dirs") or []), "agy_dirs": list(c.get("agy_dirs") or []),
+            "days": float(c.get("days", 30))}
 
 
 def _inside(path: str, root: str) -> bool:
@@ -171,6 +172,36 @@ def _codex_one(f: Path, cutoff: float) -> dict | None:
             "title": title or "Imported Codex session", "last_ts": mtime, "live": _holder(_codex_lock(f, sid)) is not None}
 
 
+def _agy(profile: Path, cutoff: float) -> list[dict]:
+    """Conversations the owner typed into agy's terminal UI (its history.jsonl names their workspace; headless
+    `agy -p` runs are not in it). <profile>/brain/<conv>/.system_generated/logs/transcript_full.jsonl holds each."""
+    ws = {}
+    try:
+        for line in (profile / "history.jsonl").read_text(errors="replace").splitlines():
+            try:
+                h = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if h.get("conversationId") and h.get("workspace"):
+                ws[h["conversationId"]] = h["workspace"]
+    except OSError:
+        return []
+    out = []
+    for conv, cwd in ws.items():
+        f = profile / "brain" / conv / ".system_generated" / "logs" / "transcript_full.jsonl"
+        try:
+            mtime = f.stat().st_mtime
+            if mtime < cutoff:
+                continue
+            title = next((i["text"] for i in transcript.read_agy(f)[0] if i["k"] == "user"), None)
+        except (OSError, UnicodeDecodeError):
+            continue
+        out.append({"provider": "agy", "session_id": conv, "path": str(f), "cwd": cwd, "last_ts": mtime,
+                    "title": (title or "Imported agy session")[:2000],
+                    "live": _holder(profile / "presence" / f"{conv}.lock") is not None})
+    return out
+
+
 def discover(settings, now: float | None = None) -> list[dict]:
     c = config(settings)
     if not c["root"]:
@@ -181,6 +212,8 @@ def discover(settings, now: float | None = None) -> list[dict]:
         found += _claude(Path(d).expanduser(), cutoff)
     for d in c["codex_dirs"]:
         found += _codex(Path(d).expanduser(), cutoff)
+    for d in c["agy_dirs"]:
+        found += _agy(Path(d).expanduser(), cutoff)
     out = []
     for s in found:
         if not _inside(s["cwd"], c["root"]):
@@ -242,6 +275,9 @@ def _learn_secrets(brain) -> None:
             brain.redactor.add(v)
     for d in c["codex_dirs"]:
         for v in _json_strings(Path(d).expanduser() / "auth.json"):
+            brain.redactor.add(v)
+    for d in c["agy_dirs"]:
+        for v in _json_strings(Path(d).expanduser() / "antigravity-oauth-token"):
             brain.redactor.add(v)
 
 
@@ -348,7 +384,7 @@ def _read(brain, cand: dict) -> tuple[list[dict], int | None]:
     """The session's items, and for Claude the byte offset they end at (the next read starts there)."""
     if cand["provider"] == "claude":
         return transcript.read_claude_from(Path(cand["path"]), 0)
-    return transcript.read_codex(Path(cand["path"]))[0], None
+    return _items(cand["provider"], Path(cand["path"])), None
 
 
 def _import(brain, provider: str, session_id: str, provider_override: str | None, cand: dict | None = None) -> dict:
@@ -531,7 +567,7 @@ RELAY_STATUS = {"idle", "busy", "shell"}
 CONFIRM_S = 60  # a typed message not in the session file this long after the terminal went quiet did not arrive
 
 
-SHARED = {"claude", "codex"}  # CLIs whose terminal session a thread can share
+SHARED = {"claude", "codex", "agy"}  # CLIs whose terminal session a thread can share
 HOME_ENV = {"claude": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}
 
 
@@ -544,7 +580,8 @@ def linked(t: dict) -> bool:
 def profile_of(t: dict) -> Path:
     """The owner's CLI home the session file lives in."""
     p = Path(t["import_path"])
-    return p.parents[2] if _src(t) == "claude" else p.parents[4]  # <profile>/projects/<dir>/<sid>.jsonl, <home>/sessions/Y/M/D/…
+    # <profile>/projects/<dir>/<sid>.jsonl; <home>/sessions/Y/M/D/rollout-….jsonl; <profile>/brain/<conv>/.system_generated/logs/…
+    return p.parents[2] if _src(t) == "claude" else p.parents[4]
 
 
 def _open(t: dict) -> dict | None:
@@ -553,8 +590,19 @@ def _open(t: dict) -> dict | None:
 
 
 def _held(t: dict) -> int | None:
-    """Codex: the pid of the terminal holding the thread's writer lock."""
-    return _holder(_codex_lock(Path(t["import_path"]), _sid(t)))
+    """Codex and agy: the pid of the terminal holding the session's lock (Codex's writer lock, agy's presence)."""
+    if _src(t) == "codex":
+        return _holder(_codex_lock(Path(t["import_path"]), _sid(t)))
+    return _holder(profile_of(t) / "presence" / f"{_sid(t)}.lock")
+
+
+def _agy_pane(pid: int) -> tuple[str, str] | None:
+    """The tmux pane an agy terminal runs in (agy keeps no session registry: its environment says)."""
+    try:
+        env = dict(e.split("=", 1) for e in Path(f"/proc/{pid}/environ").read_text(errors="replace").split("\0") if "=" in e)
+    except OSError:
+        return None
+    return _pane({"pid": pid, "tmux": env.get("TMUX_PANE", "")})
 
 
 def _codex_busy(path: Path) -> bool:
@@ -649,6 +697,10 @@ def route(t: dict) -> tuple[str, tuple | None]:
     the way its CLI queues input) or 'hold' (open and not ready for it; try again later)."""
     if _src(t) == "codex":  # `codex queue` takes it whatever the terminal is doing, and keeps it if it closes
         return ("deliver", ("queue", profile_of(t), _sid(t))) if _held(t) else ("run", None)
+    if _src(t) == "agy":  # typed into its pane; agy queues it while busy. No pane to type into: wait for it to close
+        pid = _held(t)
+        pane = _agy_pane(pid) if pid else None
+        return ("run", None) if not pid else (("deliver", ("pane", *pane)) if pane else ("hold", None))
     rec = _open(t)
     if rec is None:
         return "run", None
@@ -700,6 +752,10 @@ def _busy(t: dict) -> bool:
     """The session is open and in the middle of something (a turn, a permission prompt)."""
     if _src(t) == "codex":
         return _held(t) is not None and _codex_busy(Path(t["import_path"]))
+    if _src(t) == "agy":
+        pid = _held(t)
+        pane = _agy_pane(pid) if pid else None
+        return bool(pane) and "esc to cancel" in _screen(*pane)  # agy's footer while it works
     rec = _open(t)
     return rec is not None and rec.get("status") not in ("idle", "shell")
 
@@ -752,9 +808,9 @@ def _attach_paste(profile: Path, job: str, text: str) -> bool:
 
 def take_over(t: dict) -> str | None:
     """Close the idle terminal that holds the session so Brain can write it. The conversation is on disk."""
-    if _src(t) == "codex":
+    if _src(t) != "claude":
         if _held(t):  # it opened since the message was routed: it gets the message instead
-            raise RuntimeError("your terminal has this Codex session open; send again to queue it there")
+            raise RuntimeError("your terminal has this session open; send again and it goes there")
         return None
     rec = _open(t)
     if rec is None:

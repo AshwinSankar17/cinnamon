@@ -132,3 +132,97 @@ async def test_codex_runs_pass_the_hook_as_a_flag_and_write_no_file(tmp_path):
     args = (tmp_path / "args").read_text().splitlines()
     assert any(a.startswith("hooks.PreToolUse=") and "brain.hook" in a for a in args)
     assert list(home.iterdir()) == []  # the owner's Codex home gets no hooks.json
+
+
+# ---- agy ----------------------------------------------------------------------------------------
+def _agy_conv(profile: Path, cwd: Path, conv: str, typed: bool = True) -> Path:
+    f = profile / "brain" / conv / ".system_generated" / "logs" / "transcript_full.jsonl"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("\n".join(json.dumps(r) for r in [
+        {"step_index": 0, "type": "USER_INPUT", "content": "<USER_REQUEST>\nsweep the lr\n</USER_REQUEST>"},
+        {"step_index": 1, "type": "PLANNER_RESPONSE", "content": "Sweeping."},
+    ]) + "\n")
+    if typed:  # the TUI records what the owner typed; headless `agy -p` runs are not listed there
+        with (profile / "history.jsonl").open("a") as h:
+            h.write(json.dumps({"display": "sweep the lr", "timestamp": 1, "workspace": str(cwd),
+                                "conversationId": conv, "type": "prompt"}) + "\n")
+    return f
+
+
+def _agy_said(f: Path, user: str, reply: str) -> None:
+    _add(f, {"type": "USER_INPUT", "content": f"<USER_REQUEST>\n{user}\n</USER_REQUEST>"},
+         {"type": "PLANNER_RESPONSE", "content": reply})
+
+
+AGY_EMPTY = f"  Sweeping.\n{'─' * 40}\n>\n{'─' * 40}\n? for shortcuts"
+
+
+@pytest.fixture
+def ag(owner, brain, tmp_path):
+    prof = tmp_path / "agyprof"
+    brain.settings.raw["import"]["agy_dirs"] = [str(prof)]
+    brain.providers["agy"] = FakeProvider("agy")
+    f = _agy_conv(prof, owner["repo"], "G1")
+    t = importer.import_session(brain, "agy", "G1")
+    return {**owner, "prof": prof, "file": f, "tid": t["id"], "lock": prof / "presence" / "G1.lock"}
+
+
+def test_agy_sessions_typed_in_the_terminal_are_listed(owner, brain, tmp_path):
+    prof = tmp_path / "agyprof"
+    brain.settings.raw["import"]["agy_dirs"] = [str(prof)]
+    _agy_conv(prof, owner["repo"], "G2")
+    _agy_conv(prof, owner["repo"], "G-headless", typed=False)
+    found = importer.discover(brain.settings)
+    assert [(c["provider"], c["session_id"], c["title"], c["live"]) for c in found] == [("agy", "G2", "sweep the lr", False)]
+    with held(prof / "presence" / "G2.lock"):
+        assert importer.discover(brain.settings)[0]["live"] is True
+
+
+def test_an_agy_import_shares_the_terminal_session(ag, brain):
+    t = brain.thread(ag["tid"])
+    assert importer.linked(t) and [i["text"] for i in brain.transcript(ag["tid"])] == ["sweep the lr", "Sweeping."]
+    row = brain.db.one("SELECT * FROM provider_sessions WHERE thread_id=? AND provider='agy'", (ag["tid"],))
+    assert row["native_session_id"] == "G1"
+
+
+async def test_open_in_an_agy_pane_the_message_is_typed_as_text(ag, brain, monkeypatch):
+    sent = []
+    monkeypatch.setattr(importer, "_pane", lambda rec: ("/tmp/tmux-test/default", "%3"))
+    monkeypatch.setattr(importer, "_screen", lambda sock, pane: AGY_EMPTY)
+    monkeypatch.setattr(importer, "_paste", lambda sock, pane, text: sent.append(text))
+    with held(ag["lock"]):
+        await brain.send_message(ag["tid"], "/exit is just a path here")
+        assert sent == ["\u200b/exit is just a path here"] and brain.providers["agy"].prompts == []
+        _agy_said(ag["file"], "/exit is just a path here", "Noted.")  # agy drops the zero-width space
+        importer.watch(brain)
+    assert [i["text"] for i in brain.transcript(ag["tid"])][-2:] == ["/exit is just a path here", "Noted."]
+    assert len([e for e in brain.events.replay(ag["tid"], 0, 500) if e["type"] == "user.message"]) == 2
+
+
+async def test_agy_open_outside_tmux_holds(ag, brain, monkeypatch):
+    monkeypatch.setattr(importer, "_pane", lambda rec: None)
+    with held(ag["lock"]):
+        await brain.send_message(ag["tid"], "next")
+        assert brain._queued[ag["tid"]] and brain.providers["agy"].prompts == []
+    await brain.tick()  # the terminal closed: it runs here
+    await _settle(brain, ag["tid"])
+    assert brain.providers["agy"].prompts == ["next"]
+
+
+async def test_closed_in_agy_it_runs_here_in_the_owners_profile(ag, brain):
+    await brain.send_message(ag["tid"], "status?")
+    await _settle(brain, ag["tid"])
+    ctx = brain.providers["agy"].ctxs[-1]
+    assert ctx.resume_session == "G1" and ctx.extra["agy_app_data_dir"] == str(ag["prof"])
+    assert ctx.extra["agy_permissions"] == "skip" and ctx.extra["agy_owner_profile"] is True
+
+
+def test_agy_never_writes_the_owners_settings(tmp_path):
+    from brain.providers.agy import AgyProvider
+    prof = tmp_path / "agyprof"
+    prof.mkdir()
+    ctx = TurnContext(thread_id="t", cwd=tmp_path, prompt="hi", resume_session="G1", env={}, emit=lambda *a: None,
+                      pretool=None, extra={"agy_app_data_dir": str(prof), "agy_owner_profile": True,
+                                           "agy_permissions": "skip"})
+    AgyProvider._settings(ctx, ["command(ls)"])
+    assert list(prof.iterdir()) == []
