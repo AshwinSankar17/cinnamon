@@ -77,6 +77,8 @@ class AgyProvider:
 
     @staticmethod
     def _settings(ctx: TurnContext, add_allow: list[str] = ()) -> None:
+        if ctx.extra.get("agy_owner_profile"):  # a shared session in the owner's own profile: never touch their settings
+            return
         _, root = app_dir(ctx)
         root.mkdir(parents=True, exist_ok=True)
         f = root / "settings.json"

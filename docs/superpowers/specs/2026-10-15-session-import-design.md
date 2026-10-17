@@ -93,7 +93,7 @@ session file, `threads.import_path`, in the owner's profile. Exactly one process
 |---|---|---|
 | Open in a tmux pane, status `idle` or `busy` | pasted into that pane (bracketed paste, then Enter); the terminal runs it | held |
 | Open in a tmux pane, any other status (a permission prompt, a shell) | held until it is `idle`/`busy` | held |
-| Open elsewhere: background session, or idle interactive | Brain takes over: `claude stop <job id>` or SIGTERM, then runs it | the same |
+| Open elsewhere: idle interactive | Brain takes over (SIGTERM), then runs it | the same |
 | Open elsewhere and busy | held until idle | held |
 | Closed | Brain runs `claude -p --resume <id>` with `CLAUDE_CONFIG_DIR` = the owner's profile | the same |
 
@@ -105,7 +105,36 @@ session file, `threads.import_path`, in the owner's profile. Exactly one process
 - **Not covered:**
   - Two writers at once: a terminal opened during a Brain-run turn.
   - Approvals for pasted turns: the terminal's own permission mode applies.
-  - Codex sessions: they stay one-way.
+
+Superseded in part by "Native delivery" below (background sessions, statuses, Codex, agy).
+
+
+## Native delivery (added 2026-10-17)
+
+An open terminal gets a phone message the way its own CLI queues input, as the owner's words. Nothing is shut down
+to deliver it. Messages from other sessions, MCP channels, Slack and plugins all reach Claude labelled "NOT from
+your user", so typing is the only way into a Claude session with the owner's authority. Codex's own queue counts
+as user input. Linked now covers Claude, Codex and agy threads that run with the CLI they came from, each in the
+owner's own home for that CLI.
+
+| CLI | Open? | Delivered by | Busy? |
+|---|---|---|---|
+| Claude | `<profile>/sessions/<pid>.json` | typed into its tmux pane; a background session: `claude attach <job>` in a hidden tmux window, typed, window closed (the session keeps running) | status `busy`; `waiting` = permission prompt (held); `shell` = idle with a background shell |
+| Codex | flock on `<home>/thread-writer-locks/<sid>.lock`, read from `/proc/locks` | `codex queue --thread <sid> --message …` (queued while busy, kept on disk while closed) | last of `task_started` / `task_complete` / `turn_aborted` |
+| agy | flock on `<profile>/presence/<conv>.lock` | typed into its tmux pane (agy queues it while busy); outside tmux: held | footer `esc to cancel` |
+
+- **Typing safety:**
+  - Only when the input box (the line between the last two rules) is empty. A draft, shell mode or a dialog holds the message.
+  - A message starting with `!` or `/` would run as a shell or slash command. Claude keeps it text after a leading newline, agy after a leading zero-width space.
+- **Delivery check:** a message not back in the session file 60 s after the terminal went quiet gets a notice. For Codex, the notice says it is still queued there.
+- **Held messages** are handed over off the event loop, so a slow `claude attach` never blocks Brain. A failed delivery holds the message.
+- **Owner files:**
+  - Codex: Brain passes its hook as `-c hooks.PreToolUse=…` and writes no `hooks.json` anywhere.
+  - agy: shared turns run with `--dangerously-skip-permissions` and brain-hook as the gate, and never write the profile's `settings.json`.
+- **agy discovery:** conversations typed in agy's terminal UI (`history.jsonl` names their workspace). A conversation's first prompt is logged before agy names the conversation, so it is matched by its text and time.
+- **Accepted gaps:**
+  - A Codex terminal that closes between the lock check and `codex queue` keeps the message in Codex's queue until the next resume.
+  - Two writers at once remains deferred.
 
 ## Safety
 
@@ -116,5 +145,4 @@ session file, `threads.import_path`, in the owner's profile. Exactly one process
 
 ## Not doing
 
-- Antigravity.
 - Importing sessions outside git repos.

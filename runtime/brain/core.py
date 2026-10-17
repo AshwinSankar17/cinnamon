@@ -30,6 +30,7 @@ from .redact import SecretRegistry
 
 log = logging.getLogger("brain")
 FOLLOW_S = 60  # how often terminal sessions are checked for new turns and new sessions
+RETRY_S = 60  # a held message whose handover failed is tried again this much later
 
 SYSTEM_APPEND = (
     "You are running under Cluster Brain on a shared HPC cluster. The owner is usually away from the "
@@ -121,8 +122,10 @@ class Brain:
         self.watcher = slurm.Watcher()
         self._tasks: dict[str, asyncio.Task] = {}
         self._followed_at = float("-inf")
-        self._relayed: dict[str, list[str]] = {}  # phone messages typed into a terminal, not yet back from its file
+        self._relayed: dict[str, list[tuple[str, float]]] = {}  # phone messages typed into a terminal, not yet back from its file
         self._import_turns: dict[str, dict] = {}  # a terminal turn still being written (see importer._settle)
+        self._delivering: set[str] = set()  # threads whose held messages are being handed to their terminal
+        self._retry_at: dict[str, float] = {}  # after a failed handover, not before (monotonic)
         self._turn_counts: dict[str, dict[str, int]] = {}
         # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
         self._queued: dict[str, list[tuple[str, str]]] = {}
@@ -420,8 +423,9 @@ class Brain:
             "CLAUDE_CONFIG_DIR": str(self.p.claude_config_dir), "CODEX_HOME": str(self.p.codex_home),
             "GIT_AUTHOR_NAME": "Cluster Brain agent", "GIT_COMMITTER_NAME": "Cluster Brain agent",
         }
-        if importer.linked(t):  # the session the terminal uses lives in the owner's profile
-            env["CLAUDE_CONFIG_DIR"] = str(importer.profile_of(t))
+        home = importer.profile_of(t) if importer.linked(t) else None  # the terminal's session is in the owner's home
+        if home and t["provider"] in importer.HOME_ENV:
+            env[importer.HOME_ENV[t["provider"]]] = str(home)
 
         async def submit(script_text: str) -> str:
             path = Path(t["worktree"] or ".") / ".brain-submit.sh"
@@ -436,6 +440,8 @@ class Brain:
                  "vault_roots": vaults, "elevated": thread_id in self._elevate,
                  **{k: raw[k] for k in ("codex_sandbox", "agy_permissions", "agy_app_data_dir",
                                         "agy_allow", "agy_print_timeout") if k in raw}}
+        if home and t["provider"] == "agy":  # the owner's agy profile: brain-hook gates, its settings stay theirs
+            extra.update(agy_app_data_dir=str(home), agy_permissions="skip", agy_owner_profile=True)
         return TurnContext(thread_id=thread_id, cwd=Path(t["worktree"] or "."), prompt=prompt, resume_session=resume,
                            env=env, emit=emit or (lambda *_: None),
                            pretool=lambda tool, inp, tuid: self.pretool(thread_id, tool, inp, tuid),
@@ -465,13 +471,12 @@ class Brain:
             return ev["seq"]
         running = thread_id in self._tasks and not self._tasks[thread_id].done()
         if not running and importer.linked(t):  # one writer: the terminal, if it has the session open
-            where, pane = await asyncio.to_thread(importer.route, t)
-            if where == "relay":
-                await asyncio.to_thread(importer.relay, self, t, pane, text)
+            where, target = await asyncio.to_thread(importer.route, t)
+            if where == "deliver" and await asyncio.to_thread(importer.deliver, self, t, target, text):
                 self.events.append(thread_id, "system.notice", {"text": "Sent to your terminal, which has this "
                                                                         "session open; its reply shows up here."})
                 return ev["seq"]
-            if where == "hold":
+            if where != "run":
                 self._queued.setdefault(thread_id, []).append(("user", text))
                 self.events.append(thread_id, "system.notice", {"text": "Your terminal has this session open and is "
                                                                         "not ready for a message; it goes through as "
@@ -504,22 +509,40 @@ class Brain:
             return
         t = self.thread(thread_id)
         if t and self._queued.get(thread_id) and importer.linked(t):
-            where, pane = importer.route(t)
+            where, target = importer.route(t)
             if where == "hold":
                 return
-            if where == "relay":  # messages go to the open terminal; Brain's own wakes wait for it to close
-                queued = self._queued.pop(thread_id)
-                texts = [x for k, x in queued if k == "user"]
-                if wakes := [q for q in queued if q[0] == "wake"]:
-                    self._queued[thread_id] = wakes
-                if texts:
-                    importer.relay(self, t, pane, "\n\n".join(texts))
+            if where == "deliver":  # messages go to the open terminal; Brain's own wakes wait for it to close
+                if (thread_id not in self._delivering and time.monotonic() >= self._retry_at.get(thread_id, 0)
+                        and any(k == "user" for k, _ in self._queued[thread_id])):
+                    self._delivering.add(thread_id)
+                    asyncio.get_running_loop().create_task(self._deliver_held(thread_id, t, target))
                 return
         queued = self._queued.pop(thread_id, [])
         if queued:
             woken = all(k == "wake" for k, _ in queued)
             self._start(thread_id, "\n\n".join(text for _, text in queued),
                         wake_reason="wait fired" if woken else None)
+
+    async def _deliver_held(self, thread_id: str, t: dict, target: tuple) -> None:
+        """Hand held messages to the open terminal off the event loop (`claude attach` can take seconds)."""
+        try:
+            texts = [x for k, x in self._queued.get(thread_id, []) if k == "user"]
+            ok = bool(texts) and await asyncio.to_thread(importer.deliver, self, t, target, "\n\n".join(texts))
+            if not ok:  # e.g. an attach that never showed its input box: not reopened every tick
+                self._retry_at[thread_id] = time.monotonic() + RETRY_S
+            else:
+                self._retry_at.pop(thread_id, None)
+                left = list(self._queued.get(thread_id, []))
+                for x in texts:  # only what was handed over; one sent meanwhile goes on the next pass
+                    if ("user", x) in left:
+                        left.remove(("user", x))
+                if left:
+                    self._queued[thread_id] = left
+                else:
+                    self._queued.pop(thread_id, None)
+        finally:
+            self._delivering.discard(thread_id)
 
     async def stop(self, thread_id: str, reason: str = "Stopped from the phone", keep_queue: bool = False) -> list[str]:
         """Stop the running turn. Like Esc in Claude Code, messages queued behind it are not sent: they are
@@ -1079,6 +1102,7 @@ class Brain:
             await asyncio.to_thread(importer.follow, self)
         for tid in list(self._queued):  # e.g. held for a terminal that has since freed up or closed
             self._drain(tid)
+        await asyncio.to_thread(importer.unconfirmed, self)
         self._flush_digest()
         jobs = [dict(r) for r in self.db.q("SELECT * FROM jobs WHERE state NOT IN (%s)" %
                                            ",".join("?" * len(slurm.TERMINAL)), list(slurm.TERMINAL))]

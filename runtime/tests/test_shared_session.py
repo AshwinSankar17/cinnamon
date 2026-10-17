@@ -1,8 +1,10 @@
 """One session for the terminal and the phone, one writer at a time (session-import spec, "Shared session")."""
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -32,13 +34,27 @@ def _open_in_terminal(profile: Path, sid: str, pid: int, status: str = "idle", *
     return f
 
 
+RULE = "─" * 40
+EMPTY = f"● done\n{RULE}\n❯\xa0\n{RULE}\n  ⏵⏵ auto mode on"
+
+
 @pytest.fixture
 def tmux(monkeypatch):
-    """Pretend the session's pane checks out; record what would be typed into it."""
+    """Pretend the session's pane checks out and its input box is empty; record what would be typed into it."""
     sent = []
     monkeypatch.setattr(importer, "_pane", lambda rec: ("/tmp/tmux-test/default", "%7"))
     monkeypatch.setattr(importer, "_paste", lambda sock, pane, text: sent.append((sock, pane, text)))
+    monkeypatch.setattr(importer, "_screen", lambda sock, pane: EMPTY)
     return sent
+
+
+async def _delivered(brain):
+    """A held message is handed to the terminal off the event loop: wait for that to finish."""
+    import asyncio
+    for _ in range(100):
+        if not brain._delivering:
+            return
+        await asyncio.sleep(0.02)
 
 
 def _notices(brain, tid):
@@ -122,8 +138,78 @@ async def test_a_pane_at_a_prompt_or_shell_waits_until_it_is_free(linked, brain,
     assert tmux == [] and brain._queued[linked["tid"]]
     _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
     await brain.tick()
+    await _delivered(brain)
     assert [x[2] for x in tmux] == ["next step"] and not brain._queued.get(linked["tid"])
     assert rec.exists()
+
+
+async def test_idle_with_a_background_shell_takes_the_message(linked, brain, tmux):
+    _open_in_terminal(linked["profile"], "L1", os.getpid(), status="shell")
+    await brain.send_message(linked["tid"], "and plot the loss")
+    assert [x[2] for x in tmux] == ["and plot the loss"]
+
+
+async def test_a_half_typed_draft_is_never_merged_with_the_message(linked, brain, tmux, monkeypatch):
+    _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
+    monkeypatch.setattr(importer, "_screen", lambda sock, pane: EMPTY.replace("❯\xa0", "❯\xa0half typed"))
+    await brain.send_message(linked["tid"], "next step")
+    assert tmux == [] and brain._queued[linked["tid"]]
+    monkeypatch.setattr(importer, "_screen", lambda sock, pane: EMPTY)
+    await brain.tick()
+    await _delivered(brain)
+    assert [x[2] for x in tmux] == ["next step"] and not brain._queued.get(linked["tid"])
+
+
+@pytest.mark.parametrize("screen,glyph,ready", [
+    (EMPTY, "❯", True),
+    (EMPTY.replace("❯\xa0", '❯\xa0Try "write a test for <filepath>"'), "❯", True),  # the placeholder
+    (EMPTY.replace("❯\xa0", "❯\xa0ab"), "❯", False),
+    (f"{'─' * 30} bg1 reply ─\n❯\xa0\n{RULE}\n  ⏵⏵ auto mode on", "❯", True),  # a named session labels the rule
+    (EMPTY.replace("❯\xa0", "!\xa0"), "❯", False),  # shell mode
+    (f"{RULE}\n❯\xa0line one\n  line two\n{RULE}", "❯", False),
+    (" Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Esc to cancel", "❯", False),  # a dialog, no input box
+    (f"{RULE}\n>\n{RULE}\n? for shortcuts", ">", True),
+    (f"{RULE}\n> draft\n{RULE}\n? for shortcuts", ">", False),
+])
+def test_the_input_box_must_be_empty(screen, glyph, ready):
+    assert importer._box_empty(screen, glyph) is ready
+
+
+@pytest.mark.parametrize("provider,text,typed", [
+    ("claude", "!rm -rf build", "\n!rm -rf build"),
+    ("claude", "/compact", "\n/compact"),
+    ("claude", "plot it", "plot it"),
+    ("agy", "/exit is a path", "\u200b/exit is a path"),
+    ("agy", "#tag", "#tag"),
+])
+def test_commands_typed_from_the_phone_arrive_as_text(provider, text, typed):
+    assert importer._literal(provider, text) == typed
+
+
+async def test_a_message_starting_with_a_bang_is_typed_as_text_and_shown_once(linked, brain, tmux):
+    _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
+    await brain.send_message(linked["tid"], "!ls")
+    assert [x[2] for x in tmux] == ["\n!ls"]
+    _grow(linked["file"], "L1", linked["repo"], "\n!ls")  # Claude records the leading newline
+    importer.watch(brain)
+    assert len([e for e in brain.events.replay(linked["tid"], 0, 500) if e["type"] == "user.message"]) == 2
+
+
+async def test_a_message_the_terminal_never_took_is_reported(linked, brain, tmux):
+    _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
+    await brain.send_message(linked["tid"], "lost one")
+    brain._relayed[linked["tid"]] = [("lost one", time.time() - 120)]
+    await brain.tick()
+    assert any("did not take" in n for n in _notices(brain, linked["tid"]))
+    assert not brain._relayed.get(linked["tid"])
+
+
+async def test_a_busy_terminal_has_time_to_take_the_message(linked, brain, tmux):
+    _open_in_terminal(linked["profile"], "L1", os.getpid(), status="busy")
+    await brain.send_message(linked["tid"], "after this")
+    brain._relayed[linked["tid"]] = [("after this", time.time() - 120)]
+    await brain.tick()
+    assert not any("did not take" in n for n in _notices(brain, linked["tid"]))
 
 
 async def test_wakes_never_reach_an_open_terminal(linked, brain, tmux):
@@ -171,19 +257,62 @@ async def test_a_busy_session_outside_tmux_holds_until_idle(linked, brain, termi
     assert brain.providers["claude"].prompts == ["when you can"] and terminal_proc.wait(timeout=5) is not None
 
 
-async def test_a_background_session_is_stopped_with_claude_stop(linked, brain, terminal_proc, monkeypatch):
+@pytest.mark.parametrize("status", ["idle", "shell", "busy"])
+async def test_a_background_session_gets_the_message_through_attach(linked, brain, terminal_proc, monkeypatch, status):
     monkeypatch.setattr(importer, "_pane", lambda rec: None)
-    stopped = []
-
-    def fake_stop(profile, job):
-        stopped.append((profile, job))
-        terminal_proc.kill()
-    monkeypatch.setattr(importer, "_claude_stop", fake_stop)
-    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="idle", kind="bg", jobId="ab12cd34")
+    sent = []
+    monkeypatch.setattr(importer, "_attach_paste", lambda profile, job, text: sent.append((profile, job, text)) or True)
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status=status, kind="bg", jobId="ab12cd34")
     await brain.send_message(linked["tid"], "go on")
-    await _settle(brain, linked["tid"])
-    assert stopped == [(linked["profile"], "ab12cd34")]
-    assert any("claude attach ab12cd34" in n for n in _notices(brain, linked["tid"]))
+    assert sent == [(linked["profile"], "ab12cd34", "go on")]
+    assert terminal_proc.poll() is None and brain.providers["claude"].prompts == []  # nothing stopped, nothing run
+
+
+async def test_a_background_session_at_a_prompt_holds(linked, brain, terminal_proc, monkeypatch):
+    monkeypatch.setattr(importer, "_pane", lambda rec: None)
+    monkeypatch.setattr(importer, "_attach_paste", lambda *a: pytest.fail("typed into a prompt"))
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="waiting", kind="bg", jobId="ab12cd34")
+    await brain.send_message(linked["tid"], "go on")
+    assert brain._queued[linked["tid"]] and terminal_proc.poll() is None
+
+
+@pytest.fixture
+def attach_sock(monkeypatch):
+    d = Path(tempfile.mkdtemp(prefix="ba", dir="/tmp"))  # a Unix socket path must stay short; pytest's are long
+    monkeypatch.setattr(importer, "ATTACH_SOCK", d / "s")
+    yield d / "s"
+    subprocess.run(["tmux", "-S", str(d / "s"), "kill-server"], capture_output=True)
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def test_attach_types_into_a_hidden_window_and_closes_it(tmp_path, monkeypatch, attach_sock):
+    """A stand-in `claude` that draws an input box and records what is typed: the real tmux does the rest."""
+    got = tmp_path / "got.txt"
+    fake = tmp_path / "bin" / "claude"
+    fake.parent.mkdir()
+    box = f"{RULE}\n❯\xa0\n{RULE}"
+    fake.write_text(f"""#!{sys.executable}
+import sys
+print({box!r}, flush=True)
+open({str(got)!r}, "w").write(" ".join(sys.argv[1:]) + "|" + sys.stdin.readline())
+""")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake.parent}:{os.environ['PATH']}")
+    assert importer._attach_paste(tmp_path / "profile", "ab12cd34", "go on") is True
+    assert got.read_text() == "attach ab12cd34|go on\n"
+    gone = subprocess.run(["tmux", "-S", str(attach_sock), "has-session", "-t", "a-ab12cd34"],
+                          capture_output=True)
+    assert gone.returncode != 0
+
+
+def test_attach_that_never_shows_an_input_box_holds(tmp_path, monkeypatch, attach_sock):
+    fake = tmp_path / "bin" / "claude"
+    fake.parent.mkdir()
+    fake.write_text(f"#!{sys.executable}\nimport time\nprint('Do you want to proceed?', flush=True)\ntime.sleep(30)\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake.parent}:{os.environ['PATH']}")
+    monkeypatch.setattr(importer, "ATTACH_WAIT_S", 1.0)
+    assert importer._attach_paste(tmp_path / "profile", "ab12cd34", "go on") is False
 
 
 # ---- watching the file --------------------------------------------------------------------------
@@ -233,3 +362,50 @@ def test_a_terminal_turn_written_over_several_passes_stays_one_turn(linked, brai
     ends = [e for e in brain.events.replay(tid, 0, 500) if e["type"] == "turn.ended" and e["turn_id"] == tail[1]["turn_id"]]
     assert len(ends) == 1 and ends[0]["payload"]["text"] == "step 2"
     assert rec.exists()
+
+
+async def test_a_slow_delivery_never_blocks_brain(linked, brain, terminal_proc, monkeypatch):
+    import asyncio
+    import threading
+    monkeypatch.setattr(importer, "_pane", lambda rec: None)
+    gate, sent = threading.Event(), []
+
+    def slow(profile, job, text):  # `claude attach` taking its time to show the input box
+        gate.wait(5)
+        sent.append(text)
+        return True
+    monkeypatch.setattr(importer, "_attach_paste", slow)
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="waiting", kind="bg", jobId="ab12cd34")
+    await brain.send_message(linked["tid"], "held one")
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="idle", kind="bg", jobId="ab12cd34")
+    await asyncio.wait_for(brain.tick(), 2)  # returns while the delivery is still waiting
+    await asyncio.wait_for(brain.tick(), 2)  # and does not start a second one for the same thread
+    gate.set()
+    for _ in range(50):
+        if not brain._queued.get(linked["tid"]):
+            break
+        await asyncio.sleep(0.05)
+    assert sent == ["held one"] and not brain._queued.get(linked["tid"])
+
+
+async def test_a_delivery_that_fails_holds_the_message(linked, brain, tmux, monkeypatch):
+    def broken(sock, pane, text):
+        raise subprocess.CalledProcessError(1, "tmux")
+    monkeypatch.setattr(importer, "_paste", broken)
+    _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
+    await brain.send_message(linked["tid"], "try me")
+    assert brain._queued[linked["tid"]] == [("user", "try me")] and not brain._relayed.get(linked["tid"])
+
+
+async def test_a_failed_handover_waits_a_minute_before_trying_again(linked, brain, terminal_proc, monkeypatch):
+    monkeypatch.setattr(importer, "_pane", lambda rec: None)
+    tries = []
+    monkeypatch.setattr(importer, "_attach_paste", lambda profile, job, text: tries.append(text) and False)
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="waiting", kind="bg", jobId="ab12cd34")
+    await brain.send_message(linked["tid"], "held one")
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="idle", kind="bg", jobId="ab12cd34")
+    await brain.tick()
+    await _delivered(brain)
+    await brain.tick()  # an attach that never showed its input box: not reopened every tick
+    await _delivered(brain)
+    assert tries == ["held one"] and brain._queued[linked["tid"]] == [("user", "held one")]

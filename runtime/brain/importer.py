@@ -1,11 +1,11 @@
-"""Pick up the owner's own terminal agent sessions (Claude Code, Codex) as Brain threads.
+"""Pick up the owner's own terminal agent sessions (Claude Code, Codex, agy) as Brain threads.
 
 Only sessions whose working directory is inside the configured root and inside a git repo are listed. The cluster
-account may be shared, so the root is what keeps teammates' sessions out. Import copies the history into Brain: the
-first phone message continues it in a new native session in Brain's own config home, never in the terminal's file.
+account may be shared, so the root is what keeps teammates' sessions out. Import copies the history into Brain.
 `follow` (each scheduler minute) imports new sessions and copies in what the terminal added since; `watch` (each
-second) does the second part for Claude sessions. A Claude session run as Claude is *linked*: the thread and the
-terminal share that one session, with one writer at a time (see `route`).
+second) does the second part. A session the thread runs with the CLI it came from is *linked*: the thread and the
+terminal share that one session in the owner's own CLI home, one writer at a time. A phone message goes to an open
+terminal the way its CLI queues input, as the owner's words (`route`/`deliver`); a closed one runs here in it.
 See docs/superpowers/specs/2026-10-15-session-import-design.md.
 """
 from __future__ import annotations
@@ -13,12 +13,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
 import threading
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from . import repos, transcript
@@ -34,7 +36,8 @@ log = logging.getLogger(__name__)
 def config(settings) -> dict:
     c = settings.raw.get("import") or {}
     return {"root": c.get("root"), "claude_dirs": list(c.get("claude_dirs") or []),
-            "codex_dirs": list(c.get("codex_dirs") or []), "days": float(c.get("days", 30))}
+            "codex_dirs": list(c.get("codex_dirs") or []), "agy_dirs": list(c.get("agy_dirs") or []),
+            "days": float(c.get("days", 30))}
 
 
 def _inside(path: str, root: str) -> bool:
@@ -111,14 +114,31 @@ def _claude(profile: Path, cutoff: float) -> list[dict]:
     return out
 
 
-LIVE_WINDOW_S = 600  # Codex keeps no session registry: a rollout written in the last 10 minutes counts as open
+def _holder(lock: Path) -> int | None:
+    """The pid holding a flock on `lock`, read from the kernel's lock table (never takes the lock itself). Codex
+    and agy terminals hold one per open session; the file stays behind when they close."""
+    try:
+        st = lock.stat()
+        table = Path("/proc/locks").read_text()
+    except OSError:
+        return None
+    key = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+    for line in table.splitlines():  # "79: FLOCK  ADVISORY  WRITE 2323554 103:09:37106986 0 EOF"; waiters have "->"
+        f = line.split()
+        if len(f) >= 6 and f[1] == "FLOCK" and f[5] == key:
+            return int(f[4])
+    return None
 
 
-def _codex(home: Path, cutoff: float, now: float) -> list[dict]:
+def _codex_lock(rollout: Path, sid: str) -> Path:
+    return rollout.parents[4] / "thread-writer-locks" / f"{sid}.lock"  # <home>/sessions/Y/M/D/rollout-….jsonl
+
+
+def _codex(home: Path, cutoff: float) -> list[dict]:
     out = []
     for f in (home / "sessions").glob("*/*/*/rollout-*.jsonl"):
         try:
-            c = _codex_one(f, cutoff, now)
+            c = _codex_one(f, cutoff)
         except (OSError, UnicodeDecodeError, AttributeError):
             continue
         if c:
@@ -126,7 +146,7 @@ def _codex(home: Path, cutoff: float, now: float) -> list[dict]:
     return out
 
 
-def _codex_one(f: Path, cutoff: float, now: float) -> dict | None:
+def _codex_one(f: Path, cutoff: float) -> dict | None:
     mtime = f.stat().st_mtime
     if mtime < cutoff:
         return None
@@ -149,8 +169,71 @@ def _codex_one(f: Path, cutoff: float, now: float) -> dict | None:
                     break
     if not meta or not meta.get("cwd") or meta.get("originator") in AUTOMATED_CODEX:
         return None
-    return {"provider": "codex", "session_id": meta.get("id") or f.stem, "path": str(f), "cwd": meta["cwd"],
-            "title": title or "Imported Codex session", "last_ts": mtime, "live": now - mtime < LIVE_WINDOW_S}
+    sid = meta.get("id") or f.stem
+    return {"provider": "codex", "session_id": sid, "path": str(f), "cwd": meta["cwd"],
+            "title": title or "Imported Codex session", "last_ts": mtime, "live": _holder(_codex_lock(f, sid)) is not None}
+
+
+def _agy_first(f: Path) -> tuple[str | None, float | None]:
+    """The conversation's first user message and when it was sent."""
+    with f.open(errors="replace") as fh:
+        for line in fh:
+            try:
+                st = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if st.get("type") == "USER_INPUT":
+                m = re.search(r"<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>", st.get("content") or "", re.S)
+                try:
+                    at = datetime.fromisoformat(st["created_at"].replace("Z", "+00:00")).timestamp()
+                except (KeyError, ValueError, AttributeError):
+                    at = None
+                return (m.group(1) if m else st.get("content")), at
+    return None, None
+
+
+def _agy(profile: Path, cutoff: float) -> list[dict]:
+    """Conversations the owner typed into agy's terminal UI: its history.jsonl names their workspace (headless
+    `agy -p` runs are not in it). A conversation's first prompt is logged before agy names the conversation, so
+    one with a single prompt is matched by that prompt's text and time. Each lives in
+    <profile>/brain/<conv>/.system_generated/logs/transcript_full.jsonl."""
+    ws, first = {}, []
+    try:
+        for line in (profile / "history.jsonl").read_text(errors="replace").splitlines():
+            try:
+                h = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not h.get("workspace"):
+                continue
+            if h.get("conversationId"):
+                ws[h["conversationId"]] = h["workspace"]
+            elif h.get("display") and h.get("type") != "slash_command":
+                first.append((h["display"].strip(), h.get("timestamp", 0) / 1000, h["workspace"]))
+    except OSError:
+        return []
+    out = []
+    for d in (profile / "brain").glob("*"):
+        f = d / ".system_generated" / "logs" / "transcript_full.jsonl"
+        try:
+            mtime = f.stat().st_mtime
+            if mtime < cutoff:
+                continue
+            title, at = _agy_first(f)
+        except (OSError, UnicodeDecodeError):
+            continue
+        cwd = ws.get(d.name)
+        if not cwd and title and at is not None:
+            near = [x for x in first if x[0] == title.strip() and abs(x[1] - at) < 120]
+            if near:  # each logged prompt names one conversation: the closest in time
+                hit = min(near, key=lambda x: abs(x[1] - at))
+                first.remove(hit)
+                cwd = hit[2]
+        if cwd:
+            out.append({"provider": "agy", "session_id": d.name, "path": str(f), "cwd": cwd, "last_ts": mtime,
+                        "title": (title or "Imported agy session")[:2000],
+                        "live": _holder(profile / "presence" / f"{d.name}.lock") is not None})
+    return out
 
 
 def discover(settings, now: float | None = None) -> list[dict]:
@@ -162,7 +245,9 @@ def discover(settings, now: float | None = None) -> list[dict]:
     for d in c["claude_dirs"]:
         found += _claude(Path(d).expanduser(), cutoff)
     for d in c["codex_dirs"]:
-        found += _codex(Path(d).expanduser(), cutoff, now or time.time())
+        found += _codex(Path(d).expanduser(), cutoff)
+    for d in c["agy_dirs"]:
+        found += _agy(Path(d).expanduser(), cutoff)
     out = []
     for s in found:
         if not _inside(s["cwd"], c["root"]):
@@ -225,13 +310,16 @@ def _learn_secrets(brain) -> None:
     for d in c["codex_dirs"]:
         for v in _json_strings(Path(d).expanduser() / "auth.json"):
             brain.redactor.add(v)
+    for d in c["agy_dirs"]:
+        for v in _json_strings(Path(d).expanduser() / "antigravity-oauth-token"):
+            brain.redactor.add(v)
 
 
 def _title(brain, raw: str) -> str:
     return brain.redactor.redact(raw)[0].strip()[:60] or "Imported session"
 
 
-def _events(brain, thread_id: str, provider: str, items: list[dict], shown: list[str] | None = None,
+def _events(brain, thread_id: str, provider: str, items: list[dict], shown: list[tuple] | None = None,
             keep_open: bool = False) -> None:
     """Replay the history as phone events, grouped like live turns: each owner message opens a turn. A message in
     `shown` (sent from the phone and typed into the terminal) is on the phone already: it opens its turn silently.
@@ -255,7 +343,7 @@ def _events(brain, thread_id: str, provider: str, items: list[dict], shown: list
     for it in items:
         if it["k"] == "user":
             close()
-            match = next((x for x in shown or [] if x.strip() == it["text"].strip()), None)
+            match = next((x for x in shown or [] if x[0].strip() == it["text"].strip()), None)
             if match is not None:
                 shown.remove(match)
             else:
@@ -300,12 +388,10 @@ def _settle(brain, t: dict, force: bool = False) -> None:
     """End the open terminal turn once the terminal is done with it: idle, or no longer holding the session."""
     if not _open_turn(brain, t["id"]):
         return
-    if not force:
-        rec = _open(t)
-        if rec is not None and rec.get("status") != "idle":
-            return
+    if not force and _busy(t):
+        return
     unread = brain.thread_view(t)["unseen"]
-    _events(brain, t["id"], t["imported_from"].split(":", 1)[0], [])  # closes it
+    _events(brain, t["id"], _src(t), [])  # closes it
     if not unread:
         _arrive_read(brain, t["id"])
 
@@ -332,7 +418,7 @@ def _read(brain, cand: dict) -> tuple[list[dict], int | None]:
     """The session's items, and for Claude the byte offset they end at (the next read starts there)."""
     if cand["provider"] == "claude":
         return transcript.read_claude_from(Path(cand["path"]), 0)
-    return transcript.read_codex(Path(cand["path"]))[0], None
+    return _items(cand["provider"], Path(cand["path"])), None
 
 
 def _import(brain, provider: str, session_id: str, provider_override: str | None, cand: dict | None = None) -> dict:
@@ -348,21 +434,21 @@ def _import(brain, provider: str, session_id: str, provider_override: str | None
     raw, end = _read(brain, cand)
     items, _ = brain.redactor.redact_obj(raw)  # terminal transcripts can hold echoed tokens
     run_as = provider_override or provider
-    shared = provider == "claude" and run_as == "claude"
+    shared = provider == run_as and provider in SHARED
     t = brain.create_thread(_ensure_repo(brain, cand["repo_path"]), _title(brain, cand["title"]), "readonly", run_as)
     tid = t["id"]
     brain._append_transcript(tid, provider, None, items)
     _events(brain, tid, provider, items)
     cut = _cut(items)
     if shared:  # the terminal's own session already holds all of it
-        _point_at_terminal(brain, tid, session_id, sum(1 for i in raw if i["k"] != "user"))
+        _point_at_terminal(brain, tid, provider, session_id, sum(1 for i in raw if i["k"] != "user"))
     for name in {run_as, *brain.providers}:  # a later provider switch must not hydrate the whole history either
         brain.db.x("INSERT OR IGNORE INTO provider_sessions(thread_id, provider, native_session_id, sync_seq, updated_at,"
                    " native_seen, canon_synced) VALUES (?,?,NULL,0,?,0,?)", (tid, name, time.time(), cut))
     brain.events.append(tid, "system.notice", {"text": (
         f"Imported {len(items)} items from your terminal session {session_id} ({cand['path']}). This thread and the "
-        f"terminal share that session: a message from here goes to the terminal while it has the session open "
-        f"(typed into its tmux pane), or runs here in the same session when it is closed." if shared else
+        f"terminal share that session: a message from here goes to the terminal while it has the session open, "
+        f"or runs here in the same session when it is closed." if shared else
         f"Imported {len(items)} items from your terminal session {session_id} ({cand['path']}). Later terminal turns "
         f"keep arriving here; your next message continues it here in a new session, and the terminal's session is "
         f"untouched." + (f" The model is given the last {len(items) - cut} items; the full history stays in "
@@ -371,7 +457,7 @@ def _import(brain, provider: str, session_id: str, provider_override: str | None
     # old session ranks below the threads actually being worked on.
     brain.db.x("UPDATE threads SET imported_from=?, updated_at=?, import_items=?, import_mtime=?, import_path=?,"
                " import_offset=? WHERE id=?",
-               (key, cand["last_ts"], len(items), cand["last_ts"], cand["path"] if end is not None else None, end, tid))
+               (key, cand["last_ts"], len(items), cand["last_ts"], cand["path"], end, tid))
     _arrive_read(brain, tid)
     brain.ir.log("import", thread=tid, source=key, items=len(items))
     return brain.thread_view(brain.thread(tid))
@@ -402,11 +488,11 @@ def follow(brain) -> None:
 
 
 def watch(brain) -> None:
-    """Each second: copy in what each Claude session added (a stat per session when nothing changed)."""
+    """Each second: copy in what each followed session added (a stat per session when nothing changed)."""
     if not _LOCK.acquire(blocking=False):  # follow is mid-pass; it covers these too
         return
     try:
-        for r in brain.db.q("SELECT * FROM threads WHERE import_path IS NOT NULL AND imported_from LIKE 'claude:%'"):
+        for r in brain.db.q("SELECT * FROM threads WHERE import_path IS NOT NULL"):
             try:
                 _catch_up(brain, dict(r), None)
             except Exception:
@@ -415,97 +501,157 @@ def watch(brain) -> None:
         _LOCK.release()
 
 
-def _point_at_terminal(brain, tid: str, sid: str, native_seen: int) -> None:
-    """The thread's Claude session is the terminal's own: nothing in the transcript is missing from it."""
+def _point_at_terminal(brain, tid: str, provider: str, sid: str, native_seen: int) -> None:
+    """The thread's session is the terminal's own: nothing in the transcript is missing from it."""
     n = brain.db.one("SELECT COUNT(*) AS n FROM transcript_items WHERE thread_id=?", (tid,))["n"]
     brain.db.x("INSERT INTO provider_sessions(thread_id, provider, native_session_id, sync_seq, updated_at, native_seen,"
-               " canon_synced) VALUES (?,'claude',?,?,?,?,?) ON CONFLICT(thread_id, provider) DO UPDATE SET"
+               " canon_synced) VALUES (?,?,?,?,?,?,?) ON CONFLICT(thread_id, provider) DO UPDATE SET"
                " native_session_id=excluded.native_session_id, native_seen=excluded.native_seen,"
                " canon_synced=excluded.canon_synced, updated_at=excluded.updated_at",
-               (tid, sid, brain.events.last_seq(tid), time.time(), native_seen, n))
+               (tid, provider, sid, brain.events.last_seq(tid), time.time(), native_seen, n))
+
+
+def _src(t: dict) -> str:
+    return t["imported_from"].split(":", 1)[0]
+
+
+def _sid(t: dict) -> str:
+    return t["imported_from"].split(":", 1)[1]
+
+
+def _done(brain, t: dict) -> int:
+    """Items copied in from the session file so far (counted the old way for an import from before follow)."""
+    if t["import_items"] is not None:
+        return t["import_items"]
+    return brain.db.one("SELECT COUNT(*) AS n FROM transcript_items WHERE thread_id=? AND turn_id IS NULL"
+                        " AND provider!='user'", (t["id"],))["n"]  # the import wrote the only items with no turn
 
 
 def _link_older(brain, t: dict, path: Path) -> dict:
-    """A Claude import from before sessions were shared: find its byte offset and, if it runs as Claude, share the
-    terminal's session. Its earlier phone turns stay in the thread only."""
-    done = t["import_items"]
-    if done is None:  # imported before follow existed: the import wrote the only items with no turn and a provider
-        done = brain.db.one("SELECT COUNT(*) AS n FROM transcript_items WHERE thread_id=? AND turn_id IS NULL"
-                            " AND provider!='user'", (t["id"],))["n"]
-    off = transcript.claude_offset_after(path, done)
-    brain.db.x("UPDATE threads SET import_path=?, import_offset=? WHERE id=?", (str(path), off, t["id"]))
-    if t["provider"] == "claude":
+    """An import from before session files were followed or shared: find where it stopped and, if it runs with its
+    own CLI, share the terminal's session. Its earlier phone turns stay in the thread only."""
+    src, done = _src(t), _done(brain, t)
+    if src == "claude":
+        off = transcript.claude_offset_after(path, done)
         with path.open("rb") as f:
-            head = f.read(off).decode(errors="replace").splitlines()
-        seen = sum(1 for i in transcript._claude_items(head)[0] if i["k"] != "user")
-        _point_at_terminal(brain, t["id"], t["imported_from"].split(":", 1)[1], seen)
+            head = transcript._claude_items(f.read(off).decode(errors="replace").splitlines())[0]
+    else:
+        off, head = None, _items(src, path)[:done]
+    brain.db.x("UPDATE threads SET import_path=?, import_offset=?, import_items=? WHERE id=?",
+               (str(path), off, done, t["id"]))
+    if t["provider"] == src and src in SHARED:
+        _point_at_terminal(brain, t["id"], src, _sid(t), sum(1 for i in head if i["k"] != "user"))
         brain.events.append(t["id"], "system.notice", {"text": (
             "This thread now shares your terminal session: a message from here goes to the terminal while it has "
-            "the session open (typed into its tmux pane), or runs here in the same session when it is closed. "
+            "the session open, or runs here in the same session when it is closed. "
             "Earlier phone turns stay in this thread only.")})
     brain.ir.log("import.link", thread=t["id"], offset=off)
     return dict(brain.thread(t["id"]))
 
 
+def _items(src: str, path: Path) -> list[dict]:
+    return transcript.read_codex(path)[0] if src == "codex" else transcript.read_agy(path)[0]
+
+
 def _catch_up(brain, t: dict, cand: dict | None, during_turn: bool = False) -> None:
-    tid = t["id"]
-    claude = t["imported_from"].startswith("claude:")
-    if claude and not t["import_path"]:
+    """Copy in what the session file gained. Claude files are read from the byte offset already copied; Codex and
+    agy ones (their readers pair calls across lines) are read whole and sliced past the item count, only when
+    their mtime moved. A terminal turn stays open across passes until the session is no longer busy (_settle)."""
+    tid, src = t["id"], _src(t)
+    if not t["import_path"]:
         t = _link_older(brain, t, Path(cand["path"]))
-    path = Path(t["import_path"] or cand["path"])
+    path = Path(t["import_path"])
     mtime = path.stat().st_mtime
     if t["import_mtime"] is not None and mtime <= t["import_mtime"]:
-        if claude:
-            _settle(brain, t)
+        _settle(brain, t)
         return
     task = brain._tasks.get(tid)
     if not during_turn and task is not None and not task.done():
         return
-    if claude:
+    if src == "claude":
         raw, end = transcript.read_claude_from(path, t["import_offset"] or 0)
     else:
-        done = t["import_items"]
-        if done is None:  # imported before follow existed: see _link_older
-            done = brain.db.one("SELECT COUNT(*) AS n FROM transcript_items WHERE thread_id=? AND turn_id IS NULL"
-                                " AND provider!='user'", (tid,))["n"]
-        raw, end = _read(brain, cand)[0][done:], None
+        done = _done(brain, t)
+        raw, end = _items(src, path)[done:], None
     if raw:
         _learn_secrets(brain)
         new, _ = brain.redactor.redact_obj(raw)
         before = brain.db.one("SELECT COUNT(*) AS n FROM transcript_items WHERE thread_id=?", (tid,))["n"]
         unread = brain.thread_view(t)["unseen"]
-        brain._append_transcript(tid, t["imported_from"].split(":", 1)[0], None, new)
-        _events(brain, tid, t["imported_from"].split(":", 1)[0], new, brain._relayed.get(tid), keep_open=claude)
+        brain._append_transcript(tid, src, None, new)
+        _events(brain, tid, src, new, brain._relayed.get(tid), keep_open=True)
         brain.db.x("UPDATE threads SET updated_at=?, archived=0 WHERE id=?", (mtime, tid))
         if not unread:  # the owner lived these turns in the terminal; an unread phone reply stays unread
             _arrive_read(brain, tid)
         if linked(t):  # the shared session holds these natively: never hand them to it again
             brain.db.x("UPDATE provider_sessions SET native_seen=native_seen+?, canon_synced=CASE WHEN canon_synced=?"
-                       " THEN ? ELSE canon_synced END WHERE thread_id=? AND provider='claude'",
-                       (sum(1 for i in raw if i["k"] != "user"), before, before + len(new), tid))
+                       " THEN ? ELSE canon_synced END WHERE thread_id=? AND provider=?",
+                       (sum(1 for i in raw if i["k"] != "user"), before, before + len(new), tid, src))
         brain.ir.log("import.follow", thread=tid, items=len(new))
-    if claude:
+    if src == "claude":
         brain.db.x("UPDATE threads SET import_offset=?, import_mtime=? WHERE id=?", (end, mtime, tid))
     else:
         brain.db.x("UPDATE threads SET import_items=?, import_mtime=? WHERE id=?", (done + len(raw), mtime, tid))
 
 
 # ---- one writer: where a message for a linked thread goes ---------------------------------------
-RELAY_STATUS = {"idle", "busy"}  # a pane at a permission prompt or in shell mode would take typed text as an answer
+# "shell" is idle with a background shell running; "waiting" is a permission prompt, which would take typed text
+# as its answer (Claude Code 2.1.302). Shell mode (`!`) reports "idle": the input box check below catches it.
+RELAY_STATUS = {"idle", "busy", "shell"}
+CONFIRM_S = 60  # a typed message not in the session file this long after the terminal went quiet did not arrive
+
+
+SHARED = {"claude", "codex", "agy"}  # CLIs whose terminal session a thread can share
+HOME_ENV = {"claude": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}
 
 
 def linked(t: dict) -> bool:
-    """The thread and the terminal share one Claude session (in the owner's profile)."""
-    return bool(t.get("import_path")) and (t.get("imported_from") or "").startswith("claude:") and t["provider"] == "claude"
+    """The thread and the terminal share one session, in the owner's own CLI home: it runs with the CLI it came from."""
+    src = (t.get("imported_from") or "").split(":", 1)[0]
+    return bool(t.get("import_path")) and src in SHARED and t["provider"] == src
 
 
 def profile_of(t: dict) -> Path:
-    return Path(t["import_path"]).parents[2]  # <profile>/projects/<dir>/<session>.jsonl
+    """The owner's CLI home the session file lives in."""
+    p = Path(t["import_path"])
+    # <profile>/projects/<dir>/<sid>.jsonl; <home>/sessions/Y/M/D/rollout-….jsonl; <profile>/brain/<conv>/.system_generated/logs/…
+    return p.parents[2] if _src(t) == "claude" else p.parents[4]
 
 
 def _open(t: dict) -> dict | None:
-    sid = t["imported_from"].split(":", 1)[1]
-    return next((d for d in _live_records(profile_of(t)) if d.get("sessionId") == sid), None)
+    """Claude: the live record of the terminal that has the session open."""
+    return next((d for d in _live_records(profile_of(t)) if d.get("sessionId") == _sid(t)), None)
+
+
+def _held(t: dict) -> int | None:
+    """Codex and agy: the pid of the terminal holding the session's lock (Codex's writer lock, agy's presence)."""
+    if _src(t) == "codex":
+        return _holder(_codex_lock(Path(t["import_path"]), _sid(t)))
+    return _holder(profile_of(t) / "presence" / f"{_sid(t)}.lock")
+
+
+def _agy_pane(pid: int) -> tuple[str, str] | None:
+    """The tmux pane an agy terminal runs in (agy keeps no session registry: its environment says)."""
+    try:
+        env = dict(e.split("=", 1) for e in Path(f"/proc/{pid}/environ").read_text(errors="replace").split("\0") if "=" in e)
+    except OSError:
+        return None
+    return _pane({"pid": pid, "tmux": env.get("TMUX_PANE", "")})
+
+
+def _codex_busy(path: Path) -> bool:
+    """Codex is mid-turn: the last turn marker in its rollout is task_started."""
+    with path.open("rb") as f:
+        f.seek(max(0, path.stat().st_size - 262144))
+        tail = f.read().decode(errors="replace")
+    last = None
+    for line in tail.splitlines():
+        if '"task_started"' in line or '"task_complete"' in line or '"turn_aborted"' in line:
+            try:
+                last = (json.loads(line).get("payload") or {}).get("type") or last
+            except json.JSONDecodeError:
+                continue
+    return last == "task_started"
 
 
 def _ancestor(pid: int, root: int) -> bool:
@@ -540,6 +686,37 @@ def _pane(rec: dict) -> tuple[str, str] | None:
     return (sock, pane) if out.returncode == 0 and shell.isdigit() and _ancestor(int(rec["pid"]), int(shell)) else None
 
 
+def _screen(sock: str, pane: str) -> str:
+    out = subprocess.run(["tmux", "-S", sock, "capture-pane", "-p", "-t", pane], capture_output=True, text=True,
+                         timeout=5)
+    return out.stdout if out.returncode == 0 else ""
+
+
+def _box_empty(screen: str, glyph: str) -> bool:
+    """The TUI's input box (the lines between the last two rules) is one line: its prompt glyph and nothing typed.
+    A draft, shell mode (`!` instead of the glyph) or a dialog in its place means typing now would go wrong."""
+    lines = screen.rstrip("\n").splitlines()
+    def rule(l: str) -> bool:  # a named session writes its name into the rule: "──── bg1 reply ─"
+        x = l.strip()
+        return len(x) > 10 and x[0] == x[-1] == "─" and x.count("─") * 2 > len(x)
+    rules = [i for i, l in enumerate(lines) if rule(l)]
+    if len(rules) < 2 or rules[-1] - rules[-2] != 2:
+        return False
+    box = lines[rules[-2] + 1].replace("\xa0", " ").strip()
+    if not box.startswith(glyph):
+        return False
+    rest = box[len(glyph):].strip()
+    return not rest or (rest.startswith('Try "') and rest.endswith('"'))  # Claude's placeholder in a fresh session
+
+
+def _literal(provider: str, text: str) -> str:
+    """Typed text that starts with `!` runs as a shell command and `/` as a slash command. Claude keeps it a message
+    after a leading newline, agy after a leading zero-width space (each ignores the other's; both observed)."""
+    if not text.startswith(("!", "/")):
+        return text
+    return ("\n" if provider == "claude" else "\u200b") + text
+
+
 def _paste(sock: str, pane: str, text: str) -> None:
     """Type a message into the pane as one bracketed paste, then submit it."""
     buf = f"brain-{uuid.uuid4().hex[:8]}"
@@ -549,43 +726,140 @@ def _paste(sock: str, pane: str, text: str) -> None:
     subprocess.run(["tmux", "-S", sock, "send-keys", "-t", pane, "Enter"], check=True, timeout=10)
 
 
-def route(t: dict) -> tuple[str, tuple[str, str] | None]:
-    """'run' (closed, or open outside tmux and idle: Brain takes it over), 'relay' (type it into the open tmux pane)
-    or 'hold' (open and not ready for typed input; try again later)."""
+GLYPH = {"claude": "❯", "agy": ">"}  # the input box prompt of each TUI
+
+
+def route(t: dict) -> tuple[str, tuple | None]:
+    """'run' (closed, or open outside tmux and idle: Brain takes it over), 'deliver' (hand it to the open session
+    the way its CLI queues input) or 'hold' (open and not ready for it; try again later)."""
+    if _src(t) == "codex":  # `codex queue` takes it whatever the terminal is doing, and keeps it if it closes
+        return ("deliver", ("queue", profile_of(t), _sid(t))) if _held(t) else ("run", None)
+    if _src(t) == "agy":  # typed into its pane; agy queues it while busy. No pane to type into: wait for it to close
+        pid = _held(t)
+        pane = _agy_pane(pid) if pid else None
+        return ("run", None) if not pid else (("deliver", ("pane", *pane)) if pane else ("hold", None))
     rec = _open(t)
     if rec is None:
         return "run", None
+    ready = "deliver" if rec.get("status") in RELAY_STATUS else "hold"
     pane = _pane(rec)
     if pane:
-        return ("relay" if rec.get("status") in RELAY_STATUS else "hold"), pane
+        return ready, ("pane", *pane)
+    if rec.get("kind") == "bg" and rec.get("jobId"):  # no terminal of its own: open one to type into
+        return ready, ("attach", profile_of(t), rec["jobId"])
     return ("run" if rec.get("status") == "idle" else "hold"), None
 
 
-def relay(brain, t: dict, pane: tuple[str, str], text: str) -> None:
-    brain._relayed.setdefault(t["id"], []).append(text)  # it comes back from the file; its message is shown already
-    _paste(*pane, text)
-    brain.ir.log("import.relay", thread=t["id"], pane=pane[1])
+def deliver(brain, t: dict, target: tuple, text: str) -> bool:
+    """Hand the message to the open session. False: it was not ready after all (a draft, a dialog); hold it."""
+    entry = (text, time.time())
+    sent = brain._relayed.setdefault(t["id"], [])
+    sent.append(entry)  # first: the watcher may read it back from the file at once; it is on the phone already
+    try:
+        kind, provider = target[0], t["provider"]
+        if kind == "pane":
+            _, sock, pane = target
+            ok = _box_empty(_screen(sock, pane), GLYPH[provider])
+            if ok:
+                _paste(sock, pane, _literal(provider, text))
+        elif kind == "attach":
+            ok = _attach_paste(target[1], target[2], text)
+        elif kind == "queue":
+            _codex_queue(target[1], target[2], text)
+            ok = True
+        else:
+            raise ValueError(f"unknown delivery {kind}")
+    except Exception:  # tmux or codex failed: hold it and try again on the next pass
+        sent.remove(entry)
+        log.exception("delivery to the terminal of %s failed", t["id"])
+        return False
+    if not ok:
+        sent.remove(entry)
+    else:
+        brain.ir.log("import.deliver", thread=t["id"], via=kind)
+    return ok
 
 
-def _claude_stop(profile: Path, job: str) -> None:
-    subprocess.run([shutil.which("claude") or "claude", "stop", job], env={**os.environ, "CLAUDE_CONFIG_DIR": str(profile)},
-                   capture_output=True, check=True, timeout=60)
+def _codex_queue(home: Path, sid: str, text: str) -> None:
+    """Codex's own queue: a user message, run after the current turn, kept on disk while the terminal is closed."""
+    subprocess.run([shutil.which("codex") or "codex", "queue", "--thread", sid, "--message", text],
+                   env={**os.environ, "CODEX_HOME": str(home)}, capture_output=True, check=True, timeout=60)
+
+
+def _busy(t: dict) -> bool:
+    """The session is open and in the middle of something (a turn, a permission prompt)."""
+    if _src(t) == "codex":
+        return _held(t) is not None and _codex_busy(Path(t["import_path"]))
+    if _src(t) == "agy":
+        pid = _held(t)
+        pane = _agy_pane(pid) if pid else None
+        return bool(pane) and "esc to cancel" in _screen(*pane)  # agy's footer while it works
+    rec = _open(t)
+    return rec is not None and rec.get("status") not in ("idle", "shell")
+
+
+def unconfirmed(brain) -> None:
+    """A delivered message the session file never showed, though the terminal has been quiet for a while: tell the
+    phone instead of leaving it looking sent."""
+    now = time.time()
+    for tid, sent in list(brain._relayed.items()):
+        late = [x for x in sent if now - x[1] > CONFIRM_S]
+        t = brain.thread(tid) if late else None
+        if not late or (t and linked(t) and _busy(t)):
+            continue
+        for x in late:
+            sent.remove(x)
+            brain.events.append(tid, "system.notice", {"text": (
+                f"Codex has this message queued: \u201c{x[0][:80]}\u201d. It runs the next time you open the "
+                f"session in your terminal." if t and _src(t) == "codex" else
+                f"Your terminal did not take this message: \u201c{x[0][:80]}\u201d. Send it again, or type it there.")})
+        if not sent:
+            brain._relayed.pop(tid, None)
+
+
+ATTACH_SOCK = Path(os.environ.get("TMUX_TMPDIR", "/tmp")) / f"tmux-{os.getuid()}" / "brain-attach"
+ATTACH_WAIT_S = 10.0
+
+
+def _attach_paste(profile: Path, job: str, text: str) -> bool:
+    """Type into a background session: open it with `claude attach` in a hidden tmux window, type once its input
+    box is empty, close the window. The session keeps running (observed with 2.1.302)."""
+    sock, name = str(ATTACH_SOCK), f"a-{job}"
+    ATTACH_SOCK.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tm = ["tmux", "-S", sock]
+    subprocess.run([*tm, "kill-session", "-t", name], capture_output=True, timeout=10)  # one left from a crash
+    subprocess.run([*tm, "new-session", "-d", "-s", name, "-x", "200", "-y", "50", "env",
+                    f"CLAUDE_CONFIG_DIR={profile}", shutil.which("claude") or "claude", "attach", job],
+                   check=True, capture_output=True, timeout=10)
+    try:
+        end = time.time() + ATTACH_WAIT_S
+        while time.time() < end:
+            if _box_empty(_screen(sock, name), GLYPH["claude"]):
+                _paste(sock, name, _literal("claude", text))
+                time.sleep(1.5)  # submitted before the window goes
+                return True
+            time.sleep(0.25)
+        return False
+    finally:
+        subprocess.run([*tm, "kill-session", "-t", name], capture_output=True, timeout=10)
 
 
 def take_over(t: dict) -> str | None:
     """Close the idle terminal that holds the session so Brain can write it. The conversation is on disk."""
+    if _src(t) != "claude":
+        if _held(t):  # it opened since the message was routed: it gets the message instead
+            raise RuntimeError("your terminal has this session open; send again and it goes there")
+        return None
     rec = _open(t)
     if rec is None:
         return None
     if rec.get("status") != "idle":
         raise RuntimeError("your terminal is working in this session; send again when it is idle")
+    if rec.get("kind") == "bg":  # messages reach it through `claude attach`; never stopped to run here
+        raise RuntimeError("your background session has this open; the message goes to it instead")
     sid = t["imported_from"].split(":", 1)[1]
-    if rec.get("kind") == "bg" and rec.get("jobId"):
-        _claude_stop(profile_of(t), rec["jobId"])
-        note = f"Stopped your background session {rec['jobId']} to run this here. Reopen it with: claude attach {rec['jobId']}"
-    else:
-        os.kill(int(rec["pid"]), signal.SIGTERM)
-        note = f"Closed your idle terminal session (pid {rec['pid']}) to run this here. Pick it up with: claude --resume {sid}"
+    os.kill(int(rec["pid"]), signal.SIGTERM)
+    note = f"Closed your idle terminal session (pid {rec['pid']}) to run this here. Pick it up with: claude --resume {sid}"
     for _ in range(100):
         if _open(t) is None:
             return note
@@ -605,6 +879,10 @@ def prepare(brain, t: dict) -> str | None:
 def synced(brain, t: dict) -> None:
     """After a Brain turn on a linked session: what it wrote is in the transcript already; skip past it."""
     path = Path(t["import_path"])
+    if _src(t) != "claude":
+        brain.db.x("UPDATE threads SET import_items=?, import_mtime=? WHERE id=?",
+                   (len(_items(_src(t), path)), path.stat().st_mtime, t["id"]))
+        return
     with path.open("rb") as f:
         data = f.read()
     brain.db.x("UPDATE threads SET import_offset=?, import_mtime=? WHERE id=?",
