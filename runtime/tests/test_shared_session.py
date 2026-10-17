@@ -395,3 +395,17 @@ async def test_a_delivery_that_fails_holds_the_message(linked, brain, tmux, monk
     _open_in_terminal(linked["profile"], "L1", os.getpid(), status="idle")
     await brain.send_message(linked["tid"], "try me")
     assert brain._queued[linked["tid"]] == [("user", "try me")] and not brain._relayed.get(linked["tid"])
+
+
+async def test_a_failed_handover_waits_a_minute_before_trying_again(linked, brain, terminal_proc, monkeypatch):
+    monkeypatch.setattr(importer, "_pane", lambda rec: None)
+    tries = []
+    monkeypatch.setattr(importer, "_attach_paste", lambda profile, job, text: tries.append(text) and False)
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="waiting", kind="bg", jobId="ab12cd34")
+    await brain.send_message(linked["tid"], "held one")
+    _open_in_terminal(linked["profile"], "L1", terminal_proc.pid, status="idle", kind="bg", jobId="ab12cd34")
+    await brain.tick()
+    await _delivered(brain)
+    await brain.tick()  # an attach that never showed its input box: not reopened every tick
+    await _delivered(brain)
+    assert tries == ["held one"] and brain._queued[linked["tid"]] == [("user", "held one")]

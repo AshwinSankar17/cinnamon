@@ -30,6 +30,7 @@ from .redact import SecretRegistry
 
 log = logging.getLogger("brain")
 FOLLOW_S = 60  # how often terminal sessions are checked for new turns and new sessions
+RETRY_S = 60  # a held message whose handover failed is tried again this much later
 
 SYSTEM_APPEND = (
     "You are running under Cluster Brain on a shared HPC cluster. The owner is usually away from the "
@@ -124,6 +125,7 @@ class Brain:
         self._relayed: dict[str, list[tuple[str, float]]] = {}  # phone messages typed into a terminal, not yet back from its file
         self._import_turns: dict[str, dict] = {}  # a terminal turn still being written (see importer._settle)
         self._delivering: set[str] = set()  # threads whose held messages are being handed to their terminal
+        self._retry_at: dict[str, float] = {}  # after a failed handover, not before (monotonic)
         self._turn_counts: dict[str, dict[str, int]] = {}
         # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
         self._queued: dict[str, list[tuple[str, str]]] = {}
@@ -511,7 +513,8 @@ class Brain:
             if where == "hold":
                 return
             if where == "deliver":  # messages go to the open terminal; Brain's own wakes wait for it to close
-                if thread_id not in self._delivering and any(k == "user" for k, _ in self._queued[thread_id]):
+                if (thread_id not in self._delivering and time.monotonic() >= self._retry_at.get(thread_id, 0)
+                        and any(k == "user" for k, _ in self._queued[thread_id])):
                     self._delivering.add(thread_id)
                     asyncio.get_running_loop().create_task(self._deliver_held(thread_id, t, target))
                 return
@@ -525,7 +528,11 @@ class Brain:
         """Hand held messages to the open terminal off the event loop (`claude attach` can take seconds)."""
         try:
             texts = [x for k, x in self._queued.get(thread_id, []) if k == "user"]
-            if texts and await asyncio.to_thread(importer.deliver, self, t, target, "\n\n".join(texts)):
+            ok = bool(texts) and await asyncio.to_thread(importer.deliver, self, t, target, "\n\n".join(texts))
+            if not ok:  # e.g. an attach that never showed its input box: not reopened every tick
+                self._retry_at[thread_id] = time.monotonic() + RETRY_S
+            else:
+                self._retry_at.pop(thread_id, None)
                 left = list(self._queued.get(thread_id, []))
                 for x in texts:  # only what was handed over; one sent meanwhile goes on the next pass
                     if ("user", x) in left:
