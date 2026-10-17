@@ -1,8 +1,8 @@
-"""Codex adapter: drives `codex exec --json` with Brain's own CODEX_HOME (ctx.env, see Brain._run_turn).
+"""Codex adapter: drives `codex exec --json` with Brain's own CODEX_HOME, or the owner's for a shared session (ctx.env).
 
-brain-hook is installed as a user-level PreToolUse hook in $CODEX_HOME/hooks.json and speaks Codex's
-Claude-style contract (permissionDecision / updatedInput). Codex has no `defer`: a pending approval is a deny,
-and Brain resumes the session with a prompt once the owner decides. Brain installs the hook itself, so it runs
+brain-hook is passed as a PreToolUse hook with `-c hooks.PreToolUse=…` on every run (no hooks.json is written) and
+speaks Codex's Claude-style contract (permissionDecision / updatedInput). Codex has no `defer`: a pending approval is a deny,
+and Brain resumes the session with a prompt once the owner decides. Brain supplies the hook itself, so it runs
 with --dangerously-bypass-hook-trust instead of asking someone to trust it in the TUI.
 
 Writes are OS-sandboxed to the thread's repo/vault scope (see _cmd).
@@ -22,6 +22,8 @@ from pathlib import Path
 from .. import transcript
 from .base import TurnContext, TurnResult, kill_group, stop_process
 
+HOOK = ('hooks.PreToolUse=[{matcher="*",hooks=[{type="command",command=%s,timeout=150}]}]'
+        % json.dumps(f"{sys.executable} -m brain.hook"))  # a JSON string is a TOML basic string
 BASH_WRAP = re.compile(r"^/bin/(?:ba)?sh -lc '(.*)'$", re.S)
 
 
@@ -46,15 +48,6 @@ class CodexProvider:
     def _home(ctx: TurnContext) -> Path:
         return Path(ctx.env.get("CODEX_HOME") or Path.home() / ".codex")
 
-    def _install_hook(self, ctx: TurnContext) -> None:
-        home = self._home(ctx)
-        home.mkdir(parents=True, exist_ok=True)
-        f = home / "hooks.json"
-        want = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [
-            {"type": "command", "command": f"{sys.executable} -m brain.hook", "timeout": 150}]}]}}
-        if not f.exists() or json.loads(f.read_text() or "{}") != want:
-            f.write_text(json.dumps(want, indent=2))
-
     def _cmd(self, ctx: TurnContext, prompt: str, sid: str | None, hooks: bool = True) -> list[str]:
         # OS-enforced repo/vault scope: writable = worktree (cwd) + vault + the repo's .git + temp; network stays on
         # (Brain's Unix socket for `brain submit`, pip, git). After the owner approves an action, that one turn runs
@@ -65,8 +58,8 @@ class CodexProvider:
         if sandbox == "workspace-write":
             cmd += ["-c", f"sandbox_workspace_write.writable_roots={json.dumps(ctx.extra.get('scope_roots', []))}",
                     "-c", "sandbox_workspace_write.network_access=true"]
-        if hooks:
-            cmd.append("--dangerously-bypass-hook-trust")
+        if hooks:  # passed per run, so no hooks.json is ever written into a Codex home (the owner's, for a shared session)
+            cmd += ["--dangerously-bypass-hook-trust", "-c", HOOK]
         if ctx.system_append:
             cmd += ["-c", f"developer_instructions={json.dumps(ctx.system_append)}"]  # JSON string == TOML basic string
         return cmd + (["resume", sid] if sid else []) + [prompt]
@@ -77,7 +70,6 @@ class CodexProvider:
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=16 * 1024 * 1024, start_new_session=True)
 
     async def run_turn(self, ctx: TurnContext) -> TurnResult:
-        self._install_hook(ctx)
         proc = await self._spawn(ctx, self._cmd(ctx, ctx.prompt or "Continue.", ctx.resume_session))
         self._procs[ctx.thread_id] = proc
         res = TurnResult(session_id=ctx.resume_session)

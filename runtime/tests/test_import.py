@@ -105,7 +105,7 @@ def test_discover_lists_interactive_codex_sessions_only(owner, brain, tmp_path):
     _codex_session(home, owner["repo"], "c-auto", originator="codex_exec")
     found = importer.discover(brain.settings)
     assert [(c["provider"], c["session_id"]) for c in found] == [("codex", "c-1")]
-    assert found[0]["title"] == "profile the loader" and found[0]["live"] is True  # written just now
+    assert found[0]["title"] == "profile the loader" and found[0]["live"] is False  # no terminal holds it
 
 
 SECRET = "wandb-secret-0123456789"  # the brain fixture's redactor knows this value

@@ -420,8 +420,8 @@ class Brain:
             "CLAUDE_CONFIG_DIR": str(self.p.claude_config_dir), "CODEX_HOME": str(self.p.codex_home),
             "GIT_AUTHOR_NAME": "Cluster Brain agent", "GIT_COMMITTER_NAME": "Cluster Brain agent",
         }
-        if importer.linked(t):  # the session the terminal uses lives in the owner's profile
-            env["CLAUDE_CONFIG_DIR"] = str(importer.profile_of(t))
+        if importer.linked(t):  # the session the terminal uses lives in the owner's own CLI home
+            env[importer.HOME_ENV[t["provider"]]] = str(importer.profile_of(t))
 
         async def submit(script_text: str) -> str:
             path = Path(t["worktree"] or ".") / ".brain-submit.sh"
