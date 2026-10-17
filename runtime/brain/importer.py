@@ -231,7 +231,7 @@ def _title(brain, raw: str) -> str:
     return brain.redactor.redact(raw)[0].strip()[:60] or "Imported session"
 
 
-def _events(brain, thread_id: str, provider: str, items: list[dict], shown: list[str] | None = None,
+def _events(brain, thread_id: str, provider: str, items: list[dict], shown: list[tuple] | None = None,
             keep_open: bool = False) -> None:
     """Replay the history as phone events, grouped like live turns: each owner message opens a turn. A message in
     `shown` (sent from the phone and typed into the terminal) is on the phone already: it opens its turn silently.
@@ -255,7 +255,7 @@ def _events(brain, thread_id: str, provider: str, items: list[dict], shown: list
     for it in items:
         if it["k"] == "user":
             close()
-            match = next((x for x in shown or [] if x.strip() == it["text"].strip()), None)
+            match = next((x for x in shown or [] if x[0].strip() == it["text"].strip()), None)
             if match is not None:
                 shown.remove(match)
             else:
@@ -300,10 +300,8 @@ def _settle(brain, t: dict, force: bool = False) -> None:
     """End the open terminal turn once the terminal is done with it: idle, or no longer holding the session."""
     if not _open_turn(brain, t["id"]):
         return
-    if not force:
-        rec = _open(t)
-        if rec is not None and rec.get("status") != "idle":
-            return
+    if not force and _busy(t):
+        return
     unread = brain.thread_view(t)["unseen"]
     _events(brain, t["id"], t["imported_from"].split(":", 1)[0], [])  # closes it
     if not unread:
@@ -491,7 +489,10 @@ def _catch_up(brain, t: dict, cand: dict | None, during_turn: bool = False) -> N
 
 
 # ---- one writer: where a message for a linked thread goes ---------------------------------------
-RELAY_STATUS = {"idle", "busy"}  # a pane at a permission prompt or in shell mode would take typed text as an answer
+# "shell" is idle with a background shell running; "waiting" is a permission prompt, which would take typed text
+# as its answer (Claude Code 2.1.302). Shell mode (`!`) reports "idle": the input box check below catches it.
+RELAY_STATUS = {"idle", "busy", "shell"}
+CONFIRM_S = 60  # a typed message not in the session file this long after the terminal went quiet did not arrive
 
 
 def linked(t: dict) -> bool:
@@ -540,6 +541,34 @@ def _pane(rec: dict) -> tuple[str, str] | None:
     return (sock, pane) if out.returncode == 0 and shell.isdigit() and _ancestor(int(rec["pid"]), int(shell)) else None
 
 
+def _screen(sock: str, pane: str) -> str:
+    out = subprocess.run(["tmux", "-S", sock, "capture-pane", "-p", "-t", pane], capture_output=True, text=True,
+                         timeout=5)
+    return out.stdout if out.returncode == 0 else ""
+
+
+def _box_empty(screen: str, glyph: str) -> bool:
+    """The TUI's input box (the lines between the last two rules) is one line: its prompt glyph and nothing typed.
+    A draft, shell mode (`!` instead of the glyph) or a dialog in its place means typing now would go wrong."""
+    lines = screen.rstrip("\n").splitlines()
+    rules = [i for i, l in enumerate(lines) if l.strip() and set(l.strip()) == {"─"}]
+    if len(rules) < 2 or rules[-1] - rules[-2] != 2:
+        return False
+    box = lines[rules[-2] + 1].replace("\xa0", " ").strip()
+    if not box.startswith(glyph):
+        return False
+    rest = box[len(glyph):].strip()
+    return not rest or (rest.startswith('Try "') and rest.endswith('"'))  # Claude's placeholder in a fresh session
+
+
+def _literal(provider: str, text: str) -> str:
+    """Typed text that starts with `!` runs as a shell command and `/` as a slash command. Claude keeps it a message
+    after a leading newline, agy after a leading zero-width space (each ignores the other's; both observed)."""
+    if not text.startswith(("!", "/")):
+        return text
+    return ("\n" if provider == "claude" else "\u200b") + text
+
+
 def _paste(sock: str, pane: str, text: str) -> None:
     """Type a message into the pane as one bracketed paste, then submit it."""
     buf = f"brain-{uuid.uuid4().hex[:8]}"
@@ -549,22 +578,66 @@ def _paste(sock: str, pane: str, text: str) -> None:
     subprocess.run(["tmux", "-S", sock, "send-keys", "-t", pane, "Enter"], check=True, timeout=10)
 
 
-def route(t: dict) -> tuple[str, tuple[str, str] | None]:
-    """'run' (closed, or open outside tmux and idle: Brain takes it over), 'relay' (type it into the open tmux pane)
-    or 'hold' (open and not ready for typed input; try again later)."""
+GLYPH = {"claude": "❯", "agy": ">"}  # the input box prompt of each TUI
+
+
+def route(t: dict) -> tuple[str, tuple | None]:
+    """'run' (closed, or open outside tmux and idle: Brain takes it over), 'deliver' (hand it to the open session
+    the way its CLI queues input) or 'hold' (open and not ready for it; try again later)."""
     rec = _open(t)
     if rec is None:
         return "run", None
     pane = _pane(rec)
     if pane:
-        return ("relay" if rec.get("status") in RELAY_STATUS else "hold"), pane
+        return ("deliver" if rec.get("status") in RELAY_STATUS else "hold"), ("pane", *pane)
     return ("run" if rec.get("status") == "idle" else "hold"), None
 
 
-def relay(brain, t: dict, pane: tuple[str, str], text: str) -> None:
-    brain._relayed.setdefault(t["id"], []).append(text)  # it comes back from the file; its message is shown already
-    _paste(*pane, text)
-    brain.ir.log("import.relay", thread=t["id"], pane=pane[1])
+def deliver(brain, t: dict, target: tuple, text: str) -> bool:
+    """Hand the message to the open session. False: it was not ready after all (a draft, a dialog); hold it."""
+    entry = (text, time.time())
+    sent = brain._relayed.setdefault(t["id"], [])
+    sent.append(entry)  # first: the watcher may read it back from the file at once; it is on the phone already
+    try:
+        kind, provider = target[0], t["provider"]
+        if kind == "pane":
+            _, sock, pane = target
+            ok = _box_empty(_screen(sock, pane), GLYPH[provider])
+            if ok:
+                _paste(sock, pane, _literal(provider, text))
+        else:
+            raise ValueError(f"unknown delivery {kind}")
+    except Exception:
+        sent.remove(entry)
+        raise
+    if not ok:
+        sent.remove(entry)
+    else:
+        brain.ir.log("import.deliver", thread=t["id"], via=kind)
+    return ok
+
+
+def _busy(t: dict) -> bool:
+    """The session is open and in the middle of something (a turn, a permission prompt)."""
+    rec = _open(t)
+    return rec is not None and rec.get("status") not in ("idle", "shell")
+
+
+def unconfirmed(brain) -> None:
+    """A delivered message the session file never showed, though the terminal has been quiet for a while: tell the
+    phone instead of leaving it looking sent."""
+    now = time.time()
+    for tid, sent in list(brain._relayed.items()):
+        late = [x for x in sent if now - x[1] > CONFIRM_S]
+        t = brain.thread(tid) if late else None
+        if not late or (t and linked(t) and _busy(t)):
+            continue
+        for x in late:
+            sent.remove(x)
+            brain.events.append(tid, "system.notice", {"text": (
+                f"Your terminal did not take this message: \u201c{x[0][:80]}\u201d. Send it again, or type it there.")})
+        if not sent:
+            brain._relayed.pop(tid, None)
 
 
 def _claude_stop(profile: Path, job: str) -> None:

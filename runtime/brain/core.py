@@ -121,7 +121,7 @@ class Brain:
         self.watcher = slurm.Watcher()
         self._tasks: dict[str, asyncio.Task] = {}
         self._followed_at = float("-inf")
-        self._relayed: dict[str, list[str]] = {}  # phone messages typed into a terminal, not yet back from its file
+        self._relayed: dict[str, list[tuple[str, float]]] = {}  # phone messages typed into a terminal, not yet back from its file
         self._import_turns: dict[str, dict] = {}  # a terminal turn still being written (see importer._settle)
         self._turn_counts: dict[str, dict[str, int]] = {}
         # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
@@ -465,13 +465,12 @@ class Brain:
             return ev["seq"]
         running = thread_id in self._tasks and not self._tasks[thread_id].done()
         if not running and importer.linked(t):  # one writer: the terminal, if it has the session open
-            where, pane = await asyncio.to_thread(importer.route, t)
-            if where == "relay":
-                await asyncio.to_thread(importer.relay, self, t, pane, text)
+            where, target = await asyncio.to_thread(importer.route, t)
+            if where == "deliver" and await asyncio.to_thread(importer.deliver, self, t, target, text):
                 self.events.append(thread_id, "system.notice", {"text": "Sent to your terminal, which has this "
                                                                         "session open; its reply shows up here."})
                 return ev["seq"]
-            if where == "hold":
+            if where != "run":
                 self._queued.setdefault(thread_id, []).append(("user", text))
                 self.events.append(thread_id, "system.notice", {"text": "Your terminal has this session open and is "
                                                                         "not ready for a message; it goes through as "
@@ -504,16 +503,16 @@ class Brain:
             return
         t = self.thread(thread_id)
         if t and self._queued.get(thread_id) and importer.linked(t):
-            where, pane = importer.route(t)
+            where, target = importer.route(t)
             if where == "hold":
                 return
-            if where == "relay":  # messages go to the open terminal; Brain's own wakes wait for it to close
-                queued = self._queued.pop(thread_id)
+            if where == "deliver":  # messages go to the open terminal; Brain's own wakes wait for it to close
+                queued = self._queued[thread_id]
                 texts = [x for k, x in queued if k == "user"]
-                if wakes := [q for q in queued if q[0] == "wake"]:
-                    self._queued[thread_id] = wakes
-                if texts:
-                    importer.relay(self, t, pane, "\n\n".join(texts))
+                if texts and importer.deliver(self, t, target, "\n\n".join(texts)):
+                    self._queued[thread_id] = [q for q in queued if q[0] == "wake"]
+                    if not self._queued[thread_id]:
+                        del self._queued[thread_id]
                 return
         queued = self._queued.pop(thread_id, [])
         if queued:
@@ -1079,6 +1078,7 @@ class Brain:
             await asyncio.to_thread(importer.follow, self)
         for tid in list(self._queued):  # e.g. held for a terminal that has since freed up or closed
             self._drain(tid)
+        await asyncio.to_thread(importer.unconfirmed, self)
         self._flush_digest()
         jobs = [dict(r) for r in self.db.q("SELECT * FROM jobs WHERE state NOT IN (%s)" %
                                            ",".join("?" * len(slurm.TERMINAL)), list(slurm.TERMINAL))]
