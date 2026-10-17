@@ -24,6 +24,7 @@ class FakeProvider:
         self.native: dict[str, list[dict]] = {}
         self.prompts: list[str | None] = []
         self.hydrated: list[list[dict]] = []
+        self.ctxs: list[TurnContext] = []
 
     def native_items(self, ctx: TurnContext, session_id: str) -> list[dict] | None:
         return list(self.native[session_id]) if session_id in self.native else None
@@ -65,6 +66,7 @@ class FakeProvider:
     async def run_turn(self, ctx: TurnContext) -> TurnResult:
         sid = ctx.resume_session or f"{self.name}-{uuid.uuid4().hex[:8]}"
         ctx.extra["_sid"] = sid
+        self.ctxs.append(ctx)
         self.prompts.append(ctx.prompt)
         if ctx.prompt is not None:
             self._log(ctx, {"k": "user", "text": ctx.prompt})

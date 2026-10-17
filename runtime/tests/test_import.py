@@ -349,6 +349,8 @@ def test_a_growing_session_adds_only_the_new_part(owner, brain):
     assert _texts(brain, t["id"]) == ["train the model", "Submitted job 42.", "and now eval", "re: and now eval"]
     msgs = [e["payload"]["text"] for e in brain.events.replay(t["id"], 0, 200) if e["type"] == "user.message"]
     assert msgs == ["train the model", "and now eval"]
+    importer.follow(brain)  # nothing new, and no terminal holds the session: the open turn ends
+    assert brain.events.replay(t["id"], 0, 200)[-1]["type"] == "turn.ended"
     seq = brain.events.last_seq(t["id"])
     importer.follow(brain)  # nothing new: nothing added
     assert brain.events.last_seq(t["id"]) == seq and len(brain.transcript(t["id"])) == 4

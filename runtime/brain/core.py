@@ -121,6 +121,8 @@ class Brain:
         self.watcher = slurm.Watcher()
         self._tasks: dict[str, asyncio.Task] = {}
         self._followed_at = float("-inf")
+        self._relayed: dict[str, list[str]] = {}  # phone messages typed into a terminal, not yet back from its file
+        self._import_turns: dict[str, dict] = {}  # a terminal turn still being written (see importer._settle)
         self._turn_counts: dict[str, dict[str, int]] = {}
         # what arrived for a thread while it could not take it: ("user", text) or ("wake", reason)
         self._queued: dict[str, list[tuple[str, str]]] = {}
@@ -418,6 +420,8 @@ class Brain:
             "CLAUDE_CONFIG_DIR": str(self.p.claude_config_dir), "CODEX_HOME": str(self.p.codex_home),
             "GIT_AUTHOR_NAME": "Cluster Brain agent", "GIT_COMMITTER_NAME": "Cluster Brain agent",
         }
+        if importer.linked(t):  # the session the terminal uses lives in the owner's profile
+            env["CLAUDE_CONFIG_DIR"] = str(importer.profile_of(t))
 
         async def submit(script_text: str) -> str:
             path = Path(t["worktree"] or ".") / ".brain-submit.sh"
@@ -459,7 +463,21 @@ class Brain:
             self.events.append(thread_id, "system.notice", {"text": "Brain is paused; this message will run on resume."})
             self._queued.setdefault(thread_id, []).append(("user", text))
             return ev["seq"]
-        if thread_id in self._tasks and not self._tasks[thread_id].done():
+        running = thread_id in self._tasks and not self._tasks[thread_id].done()
+        if not running and importer.linked(t):  # one writer: the terminal, if it has the session open
+            where, pane = await asyncio.to_thread(importer.route, t)
+            if where == "relay":
+                await asyncio.to_thread(importer.relay, self, t, pane, text)
+                self.events.append(thread_id, "system.notice", {"text": "Sent to your terminal, which has this "
+                                                                        "session open; its reply shows up here."})
+                return ev["seq"]
+            if where == "hold":
+                self._queued.setdefault(thread_id, []).append(("user", text))
+                self.events.append(thread_id, "system.notice", {"text": "Your terminal has this session open and is "
+                                                                        "not ready for a message; it goes through as "
+                                                                        "soon as it is."})
+                return ev["seq"]
+        if running:
             # mirror the model's own behaviour for a message typed mid-turn: steer the running turn where the
             # provider does (Claude Code reads it at its next step), else queue it for right after this turn
             steer = getattr(self.providers.get(t["provider"]), "steer", None)
@@ -484,6 +502,19 @@ class Brain:
         """Run what queued up for an idle thread as one turn (nothing is ever dropped while Brain is paused)."""
         if self.paused or (thread_id in self._tasks and not self._tasks[thread_id].done()):
             return
+        t = self.thread(thread_id)
+        if t and self._queued.get(thread_id) and importer.linked(t):
+            where, pane = importer.route(t)
+            if where == "hold":
+                return
+            if where == "relay":  # messages go to the open terminal; Brain's own wakes wait for it to close
+                queued = self._queued.pop(thread_id)
+                texts = [x for k, x in queued if k == "user"]
+                if wakes := [q for q in queued if q[0] == "wake"]:
+                    self._queued[thread_id] = wakes
+                if texts:
+                    importer.relay(self, t, pane, "\n\n".join(texts))
+                return
         queued = self._queued.pop(thread_id, [])
         if queued:
             woken = all(k == "wake" for k, _ in queued)
@@ -616,6 +647,14 @@ class Brain:
             self.events.append(thread_id, type_, payload, turn_id=turn_id,
                                actor={"kind": "agent", "provider": t["provider"]})
 
+        blocked = None
+        if importer.linked(t):  # Brain is about to write the terminal's session: be its only writer, up to date
+            try:
+                note = await asyncio.to_thread(importer.prepare, self, t)
+                if note:
+                    emit("system.notice", {"text": note})
+            except Exception as e:
+                blocked = str(e)
         sess = self.db.one("SELECT * FROM provider_sessions WHERE thread_id=? AND provider=?", (thread_id, t["provider"]))
         ctx = self.provider_ctx(t, prompt, emit, sess["native_session_id"] if sess else None)
         self._elevate.discard(thread_id)  # one turn only
@@ -626,6 +665,8 @@ class Brain:
             self._append_transcript(thread_id, "user", turn_id, [{"k": "user", "text": prompt}])
         self.ir.log("provider.start", thread=thread_id, provider=t["provider"], turn=turn_id)
         try:
+            if blocked:
+                raise RuntimeError(blocked)
             if missing:
                 await self._catch_up(thread_id, prov, ctx, missing, emit)
             res = await prov.run_turn(ctx)
@@ -656,6 +697,11 @@ class Brain:
             except Exception:  # a transcript problem must not fail the turn; the native session still has it
                 log.exception("transcript ingest failed")
             self._save_session(thread_id, t["provider"], sid, native_seen)
+        if importer.linked(t) and not blocked:
+            try:
+                importer.synced(self, t)
+            except OSError:
+                log.exception("linked session sync failed")
         diffstat = {"files": 0, "added": 0, "removed": 0}
         if pre_ref:
             try:
@@ -1031,6 +1077,8 @@ class Brain:
         if time.monotonic() - self._followed_at >= FOLLOW_S:
             self._followed_at = time.monotonic()
             await asyncio.to_thread(importer.follow, self)
+        for tid in list(self._queued):  # e.g. held for a terminal that has since freed up or closed
+            self._drain(tid)
         self._flush_digest()
         jobs = [dict(r) for r in self.db.q("SELECT * FROM jobs WHERE state NOT IN (%s)" %
                                            ",".join("?" * len(slurm.TERMINAL)), list(slurm.TERMINAL))]
@@ -1072,11 +1120,22 @@ class Brain:
     async def wake(self, thread_id: str, reason: str, job_id: str | None = None) -> None:
         if job_id:
             self._woken_jobs.setdefault(thread_id, []).append(job_id)
-        if self.paused or (thread_id in self._tasks and not self._tasks[thread_id].done()):
+        t = self.thread(thread_id)
+        if (self.paused or (thread_id in self._tasks and not self._tasks[thread_id].done())
+                or (t and importer.linked(t) and (await asyncio.to_thread(importer.route, t))[0] != "run")):
             self._queued.setdefault(thread_id, []).append(("wake", reason))
             return
         self._ledger("wakes", 1, thread_id)
         self._start(thread_id, reason, wake_reason="wait fired")
+
+    async def run_watch(self, interval: float = 1.0) -> None:
+        """Terminal sessions' new turns, about a second after they are written."""
+        while True:
+            try:
+                await asyncio.to_thread(importer.watch, self)
+            except Exception:
+                log.exception("session watch failed")
+            await asyncio.sleep(interval)
 
     async def run_scheduler(self, interval: float = 10.0) -> None:
         while True:

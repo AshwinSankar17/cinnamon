@@ -168,6 +168,7 @@ def cmd_serve(a: argparse.Namespace) -> int:
         if a.port:
             servers.append(Server(uvicorn.Config(app, host="127.0.0.1", port=a.port, log_level="info")))
         sched = asyncio.create_task(brain.run_scheduler(a.tick))
+        watcher = asyncio.create_task(brain.run_watch())
         deadline = time.time() + a.max_hours * 3600 if a.max_hours else None
 
         async def watchdog() -> None:
@@ -190,6 +191,7 @@ def cmd_serve(a: argparse.Namespace) -> int:
         os.chmod(p.sock, 0o600) if p.sock.exists() else None
         await asyncio.gather(*(s.serve() for s in servers))
         sched.cancel()
+        watcher.cancel()
         wd.cancel()
 
     try:
