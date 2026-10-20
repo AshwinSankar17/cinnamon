@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hazel's tree</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600&amp;family=IBM+Plex+Mono&amp;family=Young+Serif&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+@keyframes twitch{0%,60%,100%{transform:rotate(0deg)}70%{transform:rotate(-3deg)}80%{transform:rotate(2deg)}}
+@keyframes swing{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.pet{transition:top .7s cubic-bezier(.34,1.3,.5,1)}
+.pet-in{animation:twitch linear infinite;transform-origin:bottom center}
+.tag{transform-origin:top center;animation:swing 4s ease-in-out infinite}
+button{font:inherit}
+button:focus-visible{outline:3px solid #3F6B2E;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: {{t.bg2}}; font-family: 'Hanken Grotesk', sans-serif; color: {{t.ink}}">
+  <div aria-hidden="true" style="position: absolute; left: 18px; top: 26px; display: flex; align-items: center; gap: 9px; opacity: .45">
+    <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8" fill="none" stroke="{{t.accent}}" stroke-width="1.8" stroke-linecap="round"></path></svg>
+    <span style="font-family: 'Young Serif', serif; font-size: 20px">Cinnamon</span>
+  </div>
+
+  <div role="dialog" aria-label="Model and effort for Cluster brain" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 0; background: {{t.raise}}; border-radius: 28px 28px 0 0; box-shadow: 0 -18px 50px rgba(0,0,0,.18); display: flex; flex-direction: column">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{t.line}}; margin-top: 8px"></div>
+    <div style="display: flex; align-items: center; padding: 6px 8px 8px 20px">
+      <div style="flex: 1">
+        <div style="font-family: 'Young Serif', serif; font-size: 20px">Model &amp; effort</div>
+        <div style="font-size: 12.5px; color: {{t.ink2}}">For Cluster brain · tap a tag and Hazel takes it</div>
+      </div>
+      <a href="Main.dc.html" aria-label="Close" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="{{t.ink}}" stroke-width="2" stroke-linecap="round"></path></svg>
+      </a>
+    </div>
+
+    <div style="margin: 0 16px; height: 282px; border-radius: 22px; position: relative; overflow: hidden; background: linear-gradient(180deg, {{t.sky1}} 0%, {{t.sky2}} 100%)">
+      <div aria-hidden="true" style="position: absolute; left: -40px; top: -50px; width: 150px; height: 110px; border-radius: 50%; background: {{t.leaf1}}"></div>
+      <div aria-hidden="true" style="position: absolute; left: 40px; top: -36px; width: 120px; height: 84px; border-radius: 50%; background: {{t.leaf2}}"></div>
+      <div aria-hidden="true" style="position: absolute; left: 4px; top: -20px; width: 90px; height: 60px; border-radius: 50%; background: {{t.leaf3}}"></div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: {{t.ground}}; border-top: 4px solid {{t.grass}}"></div>
+      <div aria-hidden="true" style="position: absolute; left: 34px; top: 20px; bottom: 22px; width: 34px; border-radius: 10px 10px 4px 4px; background: {{t.trunk}}; background-image: repeating-linear-gradient(170deg, transparent 0 14px, {{t.bark}} 14px 17px)"></div>
+      <sc-for list="{{rungs}}" as="r" hint-placeholder-count="6">
+        <div aria-hidden="true" style="position: absolute; left: 64px; top: {{r.y}}px; width: 30px; height: 7px; border-radius: 0 6px 6px 0; background: {{t.trunk}}"></div>
+        <div aria-hidden="true" style="position: absolute; left: 2px; top: {{r.ly}}px; width: 58px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: {{r.c}}">{{r.short}}</div>
+      </sc-for>
+
+      <sc-for list="{{branches}}" as="b" hint-placeholder-count="3">
+        <div aria-hidden="true" style="position: absolute; left: 66px; right: 0; top: {{b.y}}px; height: 6px; border-radius: 3px; background: {{t.trunk}}"></div>
+      </sc-for>
+      <sc-for list="{{models}}" as="m" hint-placeholder-count="5">
+        <div aria-hidden="true" style="position: absolute; left: {{m.sx}}px; top: {{m.sy}}px; width: 1.5px; height: 8px; background: {{t.tagLine}}"></div>
+        <sc-if value="{{m.off}}" hint-placeholder-val="{{true}}">
+          <button class="tag" aria-pressed="false" aria-label="{{m.name}}" onClick="{{m.pick}}" style="all: unset; cursor: pointer; box-sizing: border-box; position: absolute; left: {{m.x}}px; top: {{m.y}}px; width: {{m.w}}px; height: 40px; border-radius: 6px; background: {{t.tag}}; border: 1.5px solid {{t.tagLine}}; display: flex; align-items: center; justify-content: center; gap: 5px; animation-delay: {{m.delay}}s; color: #1C2619">
+            <span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 3px; background: {{t.sky2}}; border: 1px solid {{t.tagLine}}"></span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px">{{m.short}}</span>
+          </button>
+        </sc-if>
+        <sc-if value="{{m.on}}" hint-placeholder-val="{{false}}">
+          <button aria-pressed="true" aria-label="{{m.name}}, Hazel is holding it" style="all: unset; box-sizing: border-box; position: absolute; left: {{m.x}}px; top: {{m.y}}px; width: {{m.w}}px; height: 40px; border-radius: 6px; border: 1.5px dashed {{t.tagLine}}; opacity: .7"></button>
+        </sc-if>
+      </sc-for>
+
+      <div class="pet" aria-hidden="true" style="position: absolute; left: 70px; top: {{pet.y}}px; width: 96px; height: 92px">
+        <div class="pet-in" style="width: 96px; height: 92px; position: relative; animation-duration: {{pet.dur}}s">
+          <svg width="96" height="92" viewBox="-36 -84 96 92">
+            <path d="M10 -8C40 -8 50 -40 38 -62C28 -80 4 -78 6 -60C8 -48 26 -50 26 -36C26 -22 12 -18 6 -14Z" fill="#B0602A"></path>
+            <path d="M30 -56C34 -46 30 -34 22 -28" fill="none" stroke="#D88A4E" stroke-width="3" stroke-linecap="round"></path>
+            <ellipse cx="0" cy="-20" rx="15" ry="20" fill="#C06F33"></ellipse>
+            <ellipse cx="-5" cy="-18" rx="8" ry="13" fill="#F2DDBA"></ellipse>
+            <ellipse cx="7" cy="-8" rx="12" ry="9" fill="#B5652D"></ellipse>
+            <circle cx="-6" cy="-44" r="12" fill="#C06F33"></circle>
+            <path d="M-13 -53L-15 -65L-6 -56ZM-1 -55L3 -66L5 -54Z" fill="#B0602A"></path>
+            <ellipse cx="-14" cy="-40.5" rx="6.5" ry="4.8" fill="#F2DDBA"></ellipse>
+            <circle cx="-9" cy="-47" r="2.5" fill="#1A120D"></circle>
+            <circle cx="-9.8" cy="-47.8" r="0.8" fill="#fff"></circle>
+            <circle cx="-20" cy="-41.5" r="1.7" fill="#3A2216"></circle>
+          </svg>
+          <div style="position: absolute; left: -10px; top: 46px; height: 22px; padding: 0 6px; border-radius: 4px; background: {{t.tag}}; border: 1.5px solid {{t.tagLine}}; transform: rotate(-8deg); font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 20px; color: #1C2619; white-space: nowrap">{{pet.label}}</div>
+          <svg style="position: absolute; left: 0; top: 0" width="96" height="92" viewBox="-36 -84 96 92"><ellipse cx="-20" cy="-27" rx="3.5" ry="3" fill="#B5652D"></ellipse><ellipse cx="-10" cy="-27" rx="3.5" ry="3" fill="#B5652D"></ellipse></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 12px 20px 0; display: flex; flex-direction: column; gap: 2px" aria-live="polite">
+      <div style="font-family: 'Young Serif', serif; font-size: 17px">“{{line}}”</div>
+      <div style="font-size: 12.5px; line-height: 17px; color: {{t.ink2}}"><b style="font-weight: 600; color: {{t.ink}}">{{modelName}}</b>{{rec}} · {{modelDesc}}</div>
+    </div>
+
+    <div role="group" aria-label="Assistant" style="margin: 14px 20px 0; display: flex; gap: 6px; padding: 4px; border-radius: 26px; background: {{t.well}}">
+      <sc-for list="{{clis}}" as="c" hint-placeholder-count="3">
+        <button aria-pressed="{{c.on}}" onClick="{{c.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 48px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 17px; font-weight: 600; font-size: 14px; background: {{c.bg}}; color: {{c.fg}}">{{c.label}}<span style="font-size: 11px; font-weight: 400; opacity: .72">{{c.maker}}</span></button>
+      </sc-for>
+    </div>
+
+    <div style="margin: 14px 20px 0">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.ink3}}">How hard it thinks</span>
+        <span style="font-size: 12.5px; color: {{t.ink2}}">{{effortNote}}</span>
+      </div>
+      <div role="group" aria-label="Effort" style="display: flex; gap: 6px">
+        <sc-for list="{{efforts}}" as="e" hint-placeholder-count="6">
+          <button aria-pressed="{{e.on}}" aria-label="{{e.label}}" onClick="{{e.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 44px; border-radius: 14px; text-align: center; line-height: 44px; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid {{e.border}}; background: {{e.bg}}; color: {{e.fg}}">{{e.short}}</button>
+        </sc-for>
+      </div>
+      <div style="margin-top: 7px; font-size: 12.5px; line-height: 17px; color: {{t.ink2}}">{{hint}}</div>
+    </div>
+
+    <div style="margin: auto 20px 18px; display: flex; flex-direction: column; gap: 8px">
+      <a href="Main.dc.html" style="height: 50px; border-radius: 25px; background: {{t.ink}}; color: {{t.raise}}; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; text-decoration: none">Use for this thread</a>
+      <div style="font-size: 12px; line-height: 16px; text-align: center; color: {{t.ink3}}">Starts with your next message. Changing assistant keeps the whole conversation.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { cli: 'codex', model: 'gpt-6-astra', effort: 'medium' }; }
+  data() {
+    const E5 = ['low', 'medium', 'high', 'xhigh', 'max'], E6 = E5.concat(['ultra']), E3 = ['low', 'medium', 'high'];
+    return {
+      claude: { label: 'Claude', def: 'opus', models: [
+        { id: 'fable', name: 'Fable 5.1', short: 'Fable 5.1', efforts: E5, desc: "Most capable. Slowest, uses the most quota." }, { id: 'opus', name: 'Opus 5.5', short: 'Opus 5.5', efforts: E5, desc: "Very capable all-rounder for hard work." },
+        { id: 'sonnet', name: 'Sonnet 5.5', short: 'Sonnet 5.5', efforts: E5, desc: "Fast and capable for everyday work." }, { id: 'haiku', name: 'Haiku 4.5', short: 'Haiku 4.5', efforts: E5, desc: "Fastest and lightest, for quick asks." }] },
+      codex: { label: 'Codex', def: 'gpt-6-astra', models: [
+        { id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', short: '6.1 Sol', efforts: E6, desc: "Newest and most capable." }, { id: 'gpt-6-astra', name: 'GPT-6-Astra', short: '6 Astra', efforts: E6, desc: "Strong all-rounder." },
+        { id: 'gpt-6-sol', name: 'GPT-6-Sol', short: '6 Sol', efforts: E6, desc: "Capable, one step older." }, { id: 'gpt-6-luna', name: 'GPT-6-Luna', short: '6 Luna', efforts: E5, desc: "Lighter and faster." },
+        { id: 'gpt-5.6-sol', name: 'GPT-5.6-Sol', short: '5.6 Sol', efforts: E6, desc: "Previous generation, capable." }, { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra', short: '5.6 Terra', efforts: E6, desc: "Previous generation, balanced." },
+        { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna', short: '5.6 Luna', efforts: E5, desc: "Previous generation, lightest." }] },
+      agy: { label: 'Antigravity', def: 'gemini-4-argon', models: [
+        { id: 'gemini-4-argon', name: 'Gemini 4 Argon', short: 'Argon 4', efforts: E3, desc: "Google's most capable." }, { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', short: 'Flash 3.8', efforts: E3, desc: "Fast and light." },
+        { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', short: 'Opus 5.5', efforts: E3, desc: "Claude Opus, run through Antigravity." }, { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', short: 'Sonnet 5.5', efforts: E3, desc: "Claude Sonnet, run through Antigravity." },
+        { id: 'gpt-oss-120b', name: 'GPT-OSS 120B', short: 'OSS 120B', efforts: ['medium'], desc: "Open model with one setting." }] },
+    };
+  }
+  keep(efforts, want) { return efforts.includes(want) ? want : efforts.includes('medium') ? 'medium' : efforts[0]; }
+  renderVals() {
+    const night = this.props.night ?? false;
+    const t = night
+      ? { ink: '#E6EBDD', ink2: '#B3C0AA', ink3: '#909D89', raise: '#18241B', bg2: '#223127', line: 'rgba(230,235,221,.18)', accent: '#9ACB72', well: 'rgba(230,235,221,.08)', sky1: '#0A181A', sky2: '#1B312D', ground: '#14281B', grass: '#1B3625', trunk: '#3B2A1E', bark: '#2B1E15', leaf1: '#10241A', leaf2: '#163021', leaf3: '#1D3D29', tag: '#C9A374', tagLine: '#5E4630' }
+      : { ink: '#1C2619', ink2: '#44523D', ink3: '#5E6B57', raise: '#F8F9F1', bg2: '#E6EAD8', line: 'rgba(28,38,25,.14)', accent: '#3F6B2E', well: '#E6EAD8', sky1: '#CFE5D6', sky2: '#F4F1DC', ground: '#6E9C55', grass: '#5A8746', trunk: '#6E4B32', bark: '#563A26', leaf1: '#3F6E36', leaf2: '#4F8540', leaf3: '#68A250', tag: '#E2BC86', tagLine: '#8C6A44' };
+    const D = this.data(), s = this.state, cli = D[s.cli];
+    const model = cli.models.find((m) => m.id === s.model) || cli.models[0];
+    const effort = this.keep(model.efforts, s.effort);
+    const idx = model.efforts.indexOf(effort), n = model.efforts.length;
+    const tier = n === 1 ? 1 : Math.round((idx / (n - 1)) * 3);
+    const SHORT = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const LONG = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const rungY = (k) => (n === 1 ? 150 : 236 - k * (170 / (n - 1)));
+    const rungs = model.efforts.map((e, k) => ({ y: rungY(k), ly: rungY(k) - 3, short: SHORT[e], c: k === idx ? t.accent : t.ink3 }));
+    const N = cli.models.length, cols = 3, w = 64, rows = Math.ceil(N / cols);
+    const branches = Array.from({ length: rows }, (_, r) => ({ y: 30 + r * 64 }));
+    const models = cli.models.map((m, i) => {
+      const r = Math.floor(i / cols), c = i % cols, x = 140 + c * (w + 8), y = 44 + r * 64, on = m.id === model.id;
+      return { ...m, x, y, w, sx: x + w / 2, sy: 36 + r * 64, on, off: !on, delay: (i * 0.37) % 2,
+        pick: () => this.setState({ model: m.id, effort: this.keep(m.efforts, effort) }) };
+    });
+    const durs = [4.2, 3.2, 2.4, 1.6, 1.1, 0.8];
+    const pet = { y: rungY(idx) - 82, label: model.short, dur: durs[Math.round((idx / Math.max(1, n - 1)) * 5)] };
+    const HINT = { low: 'Fast replies for simple asks. Uses the least quota.', medium: 'A good default for most things.', high: 'Takes longer on tricky work.', xhigh: 'For hard problems. Slower.', max: 'Its very best. Slowest, uses the most quota.', ultra: 'Beyond Deepest. Only some Codex models have it.' };
+    const efforts = model.efforts.map((e) => { const on = e === effort; return { label: LONG[e], short: SHORT[e], on,
+      bg: on ? t.accent : 'transparent', fg: on ? t.raise : t.ink, border: on ? t.accent : t.line, pick: () => this.setState({ effort: e }) }; });
+    const clis = ['claude', 'codex', 'agy'].map((k) => { const on = k === s.cli; return { label: D[k].label, maker: { claude: 'by Anthropic', codex: 'by OpenAI', agy: 'by Google' }[k], on, bg: on ? t.ink : 'transparent', fg: on ? t.raise : t.ink,
+      pick: () => { const m = D[k].models.find((x) => x.id === D[k].def); this.setState({ cli: k, model: m.id, effort: this.keep(m.efforts, effort) }); } }; });
+    const LINES = ['Staying close to the ground.', 'Halfway up the trunk.', 'Up in the high branches.', 'At the very top of the tree.'];
+    return { t, rungs, branches, models, pet, efforts, clis, line: LINES[tier], summary: `${cli.label} · ${model.name} · ${LONG[effort]}`, modelName: model.name, modelDesc: model.desc, rec: model.id === cli.def ? ' (recommended)' : '', hint: n === 1 ? 'This model has one setting.' : HINT[effort],
+      effortNote: n === 1 ? 'One setting only' : `Branch ${idx + 1} of ${n}` };
+  }
+}
+</script>
+</body>
+</html>

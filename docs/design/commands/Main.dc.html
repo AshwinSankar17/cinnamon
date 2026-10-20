@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home with the / list</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono&amp;family=Fraunces:wght@600&amp;family=Instrument+Sans:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+@keyframes hop{0%,70%,100%{transform:translateY(0)}76%{transform:translateY(-9px)}82%{transform:translateY(0)}88%{transform:translateY(-5px)}}
+.crumb{animation:hop 3.4s linear infinite;transform-origin:bottom}
+.row:hover{filter:brightness(.97)}
+input::placeholder{color:inherit;opacity:.6}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: {{t.bg2}}; font-family: 'Instrument Sans', sans-serif; color: {{t.ink}}">
+  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 520px; background: linear-gradient(180deg, {{t.wall}} 0%, {{t.bg2}} 100%)"></div>
+  <div aria-hidden="true" style="position: absolute; left: 196px; top: 196px; width: 150px; height: 120px; border-radius: 14px; border: 8px solid {{t.frame}}; background: linear-gradient(180deg, {{t.sky1}}, {{t.sky2}}); opacity: .9"></div>
+  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 330px; height: 18px; background: {{t.wood}}"></div>
+  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 322px; height: 10px; background: {{t.top}}"></div>
+
+  <div style="position: absolute; left: 18px; right: 18px; top: 22px">
+    <div style="display: flex; align-items: center; gap: 9px; height: 44px">
+      <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24"><path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8" fill="none" stroke="{{t.accent}}" stroke-width="1.8" stroke-linecap="round"></path></svg>
+      <div style="flex: 1; font-family: Fraunces, serif; font-weight: 600; font-size: 23px">Cinnamon</div>
+      <div style="display: flex; align-items: center; gap: 7px"><span style="width: 7px; height: 7px; border-radius: 4px; background: #4B6332"></span><span style="font-family: 'DM Mono', monospace; font-size: 11px; color: {{t.ink2}}">live</span></div>
+    </div>
+    <h1 style="margin: 10px 0 0; font-family: Fraunces, serif; font-weight: 600; font-size: 27px; line-height: 30px">Cluster brain is between turns.</h1>
+    <p style="margin: 8px 0 0; max-width: 300px; font-size: 13.5px; line-height: 19px; color: {{t.ink2}}">Type / to see every command and skill this thread can run.</p>
+  </div>
+
+  <div class="crumb" aria-hidden="true" style="position: absolute; left: 300px; top: 270px; width: 76px; height: 52px">
+    <svg width="76" height="52" viewBox="-40 -48 76 52">
+      <path d="M14 -18L36 -27L31 -13Z" fill="#7A5236"></path>
+      <ellipse cx="2" cy="-18" rx="18" ry="13" fill="#A8774E"></ellipse>
+      <ellipse cx="-4" cy="-13" rx="12" ry="8" fill="#EEDCC3"></ellipse>
+      <path d="M-2 -25C10 -29 21 -22 18 -11C10 -13 2 -16 -2 -25Z" fill="#7E5434"></path>
+      <circle cx="-14" cy="-32" r="10" fill="#9A6A44"></circle>
+      <path d="M-23.5 -35C-21 -44 -8 -45 -5 -36C-10 -38.5 -17 -38.5 -23.5 -35Z" fill="#6E4A2E"></path>
+      <circle cx="-17" cy="-28.5" r="3.6" fill="#EEDCC3"></circle>
+      <circle cx="-17" cy="-33" r="2.3" fill="#1A120D"></circle>
+      <circle cx="-17.8" cy="-33.8" r="0.75" fill="#fff"></circle>
+      <path d="M-24 -32.5L-32 -30.5L-24 -28.3Z" fill="#E7A93E"></path>
+      <path d="M-3 -6V0M4 -6V0" stroke="#C78A4A" stroke-width="1.8" stroke-linecap="round"></path>
+    </svg>
+  </div>
+
+  <div style="position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; flex-direction: column; gap: 10px">
+    <div role="menu" aria-label="Commands and skills" style="background: {{t.raise}}; border: 1px solid {{t.line}}; border-radius: 22px; overflow: hidden; box-shadow: 0 14px 40px rgba(42,26,16,.16)">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid {{t.line}}">
+        <div style="flex: 1; font-size: 12px; color: {{t.ink2}}">For <span style="font-weight: 600; color: {{t.ink}}">Cluster brain</span></div>
+        <a href="Crumb.dc.html" aria-label="Model and effort: Claude Opus 5.5, Thorough. Change" style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 15px; background: {{t.tint}}; color: {{t.accent}}; font-family: 'DM Mono', monospace; font-size: 11.5px">
+          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24"><path d="M4 18h16M7 18V9M12 18V5M17 18v-6" fill="none" stroke="{{t.accent}}" stroke-width="2.4" stroke-linecap="round"></path></svg>
+          Opus 5.5 · Thorough
+        </a>
+      </div>
+      <div style="max-height: 372px; overflow-y: auto; padding-bottom: 6px">
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+          <div style="padding: 10px 14px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.ink3}}">{{g.title}}</div>
+          <sc-for list="{{g.items}}" as="i" hint-placeholder-count="3">
+            <sc-if value="{{i.link}}" hint-placeholder-val="{{false}}">
+              <a class="row" href="Crumb.dc.html" role="menuitem" style="display: flex; flex-direction: column; gap: 2px; min-height: 44px; justify-content: center; padding: 6px 14px">
+                <span style="display: flex; align-items: center; gap: 8px"><span style="flex: 1; font-family: 'DM Mono', monospace; font-size: 13.5px; color: {{t.ink}}">/{{i.name}}<span style="color: {{t.ink3}}">{{i.args}}</span></span><span style="font-size: 11px; font-weight: 600; color: {{i.tagColor}}">{{i.tag}}</span></span>
+                <span style="font-size: 12.5px; line-height: 17px; color: {{t.ink2}}">{{i.desc}}</span>
+              </a>
+            </sc-if>
+            <sc-if value="{{i.plain}}" hint-placeholder-val="{{true}}">
+              <button class="row" role="menuitem" onClick="{{i.pick}}" style="all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 44px; justify-content: center; padding: 6px 14px">
+                <span style="display: flex; align-items: center; gap: 8px"><span style="flex: 1; font-family: 'DM Mono', monospace; font-size: 13.5px; color: {{t.ink}}">/{{i.name}}<span style="color: {{t.ink3}}">{{i.args}}</span></span><span style="font-size: 11px; font-weight: 600; color: {{i.tagColor}}">{{i.tag}}</span></span>
+                <span style="font-size: 12.5px; line-height: 17px; color: {{t.ink2}}">{{i.desc}}</span>
+              </button>
+            </sc-if>
+          </sc-for>
+        </sc-for>
+        <sc-if value="{{empty}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 14px; font-size: 13px; color: {{t.ink3}}">No matching command or skill.</div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 8px; align-items: center; height: 58px">
+      <a href="Menu.dc.html" aria-label="Open menu" style=" width: 58px; height: 58px; border-radius: 29px; background: {{t.raise}}; border: 1px solid {{t.line}}; box-sizing: border-box; display: flex; align-items: center; justify-content: center">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M4 8h16M4 16h16" stroke="{{t.ink}}" stroke-width="2" stroke-linecap="round"></path></svg>
+      </a>
+      <div style="flex: 1; height: 58px; box-sizing: border-box; border-radius: 29px; background: {{t.raise}}; border: 2px solid {{t.accent}}; display: flex; align-items: center; padding: 0 8px 0 20px; gap: 10px">
+        <label for="composer" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Message Cluster brain</label>
+        <input id="composer" value="{{q}}" onChange="{{onType}}" placeholder="Tell Cluster brain…" autocomplete="off" style="flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-family: 'DM Mono', monospace; font-size: 15px; color: {{t.ink}}">
+        <button aria-label="Send" style="all: unset; cursor: pointer; width: 42px; height: 42px; border-radius: 21px; background: {{t.ink}}; display: flex; align-items: center; justify-content: center">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="{{t.raise}}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { q: '/' }; }
+  renderVals() {
+    const night = this.props.night ?? false;
+    const t = night
+      ? { ink: '#F6E8D6', ink2: '#D0BBA5', ink3: '#AA937E', raise: '#2C2019', bg2: '#3A2B21', line: 'rgba(246,232,214,.13)', accent: '#F0A35E', tint: 'rgba(240,163,94,.16)', wall: '#2A1F18', frame: '#4A382B', sky1: '#1E2A44', sky2: '#3A3550', wood: '#5A3A24', top: '#6E4A30' }
+      : { ink: '#2A1A10', ink2: '#5E4636', ink3: '#7D6756', raise: '#FFFBF5', bg2: '#F3E6D4', line: 'rgba(42,26,16,.12)', accent: '#B4561F', tint: '#F8E6D6', wall: '#F7E7D0', frame: '#FFFFFF', sky1: '#BFE0F0', sky2: '#F8EBD3', wood: '#B9784A', top: '#D49B65' };
+    const cmd = (name, desc, tag, extra) => ({ name, desc, tag, args: '', tagColor: tag === 'Claude' ? t.ink2 : t.accent, ...extra });
+    const all = [
+      { title: 'Commands', items: [
+        cmd('compact', 'Shrink the conversation into a summary so there is room to keep going.', 'Claude'),
+        cmd('model', 'Choose the assistant, the model and how hard it thinks.', 'Cinnamon', { link: true }),
+        cmd('effort', 'How hard it thinks, from Quick to Deepest.', 'Cinnamon', { link: true }),
+        cmd('stop', 'Stop the current turn.', 'Cinnamon'),
+      ] },
+      { title: 'Your skills and commands', items: [
+        cmd('superpowers:brainstorming', 'Turn an idea into a design before building it.', 'plugin'),
+        cmd('superpowers:writing-plans', 'Write an implementation plan from a spec.', 'plugin'),
+        cmd('impeccable', 'Design direction, critique and polish.', 'plugin'),
+        cmd('task-observer', 'Watch a task and log what to improve.', 'yours'),
+      ] },
+    ];
+    const q = (this.state.q || '').replace(/^\//, '').toLowerCase();
+    const groups = all
+      .map((g) => ({ ...g, items: g.items.filter((i) => !q || i.name.includes(q) || (q.length > 1 && i.desc.toLowerCase().includes(q))).map((i) => ({ ...i, plain: !i.link, tagColor: i.tag === 'plugin' || i.tag === 'yours' ? t.ink3 : i.tagColor, pick: () => this.setState({ q: '/' + i.name + ' ' }) })) }))
+      .filter((g) => g.items.length);
+    return { t, groups, empty: !groups.length, q: this.state.q, onType: (e) => this.setState({ q: e.target.value }) };
+  }
+}
+</script>
+</body>
+</html>

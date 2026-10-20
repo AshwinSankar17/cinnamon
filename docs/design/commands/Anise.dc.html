@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Anise's orbits</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400&amp;family=Sora:wght@400;600&amp;family=Unbounded:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 4px rgba(255,210,122,.45),0 0 22px rgba(255,210,122,.6)}50%{box-shadow:0 0 0 7px rgba(255,210,122,.25),0 0 34px rgba(255,210,122,.8)}}
+.pet-in{animation:float ease-in-out infinite}
+.ring{transition:opacity .4s ease}
+.ring-in{animation:spin linear infinite}
+.orb{transition:left .55s cubic-bezier(.34,1.25,.5,1),top .55s cubic-bezier(.34,1.25,.5,1),width .3s ease,height .3s ease}
+.orb.on{animation:glow 2.2s ease-in-out infinite}
+button{font:inherit}
+button:focus-visible{outline:3px solid #3D4FD1;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: {{t.bg2}}; font-family: Sora, sans-serif; color: {{t.ink}}">
+  <div aria-hidden="true" style="position: absolute; left: 18px; top: 26px; display: flex; align-items: center; gap: 9px; opacity: .45">
+    <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8" fill="none" stroke="{{t.accent}}" stroke-width="1.8" stroke-linecap="round"></path></svg>
+    <span style="font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px">Cinnamon</span>
+  </div>
+
+  <div role="dialog" aria-label="Model and effort for Cluster brain" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 0; background: {{t.raise}}; border-radius: 28px 28px 0 0; box-shadow: 0 -18px 50px rgba(0,0,0,.2); display: flex; flex-direction: column">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{t.line}}; margin-top: 8px"></div>
+    <div style="display: flex; align-items: center; padding: 6px 8px 8px 20px">
+      <div style="flex: 1">
+        <div style="font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px">Model &amp; effort</div>
+        <div style="font-size: 12px; color: {{t.ink2}}">For Cluster brain · tap a moon and Anise lifts it</div>
+      </div>
+      <a href="Main.dc.html" aria-label="Close" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="{{t.ink}}" stroke-width="2" stroke-linecap="round"></path></svg>
+      </a>
+    </div>
+
+    <div style="margin: 0 16px; height: 282px; border-radius: 22px; position: relative; overflow: hidden; background: linear-gradient(180deg, {{t.sky1}} 0%, {{t.sky2}} 100%)">
+      <sc-for list="{{stars}}" as="s" hint-placeholder-count="12">
+        <div aria-hidden="true" style="position: absolute; left: {{s.x}}px; top: {{s.y}}px; width: {{s.r}}px; height: {{s.r}}px; border-radius: 50%; background: #FFFFFF; opacity: {{t.starO}}"></div>
+      </sc-for>
+      <div aria-hidden="true" style="position: absolute; right: 18px; top: 16px; width: 46px; height: 46px; border-radius: 50%; background: {{t.planet}}"></div>
+      <div aria-hidden="true" style="position: absolute; right: 4px; top: 34px; width: 74px; height: 12px; border-radius: 50%; border: 3px solid {{t.ringC}}; transform: rotate(-14deg)"></div>
+      <div aria-hidden="true" style="position: absolute; left: -20px; right: -20px; bottom: -60px; height: 110px; border-radius: 50%; background: {{t.ground}}"></div>
+      <div aria-hidden="true" style="position: absolute; left: 60px; bottom: 18px; width: 30px; height: 8px; border-radius: 50%; background: {{t.crater}}"></div>
+      <div aria-hidden="true" style="position: absolute; right: 70px; bottom: 26px; width: 22px; height: 6px; border-radius: 50%; background: {{t.crater}}"></div>
+
+      <sc-for list="{{rings}}" as="r" hint-placeholder-count="6">
+        <div class="ring" aria-hidden="true" style="position: absolute; left: {{r.l}}px; top: {{r.tp}}px; width: {{r.d}}px; height: {{r.d}}px; transform: rotate(-10deg) scaleY(.3); opacity: {{r.o}}">
+          <div class="ring-in" style="width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%; border: 2px dashed {{t.orbit}}; position: relative; animation-duration: {{r.dur}}s">
+            <div style="position: absolute; left: 50%; top: -7px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #5EE6C8"></div>
+          </div>
+        </div>
+      </sc-for>
+
+      <div aria-hidden="true" style="position: absolute; left: 124px; top: 128px; width: 110px; height: 123px">
+        <div class="pet-in" style="width: 110px; height: 123px; animation-duration: {{pet.dur}}s">
+          <svg width="110" height="123" viewBox="-50 -64 100 112">
+            <path d="M-21 2C-28 14 -48 22 -42 28.75" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="-42" cy="28.75" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M-15 2C-20 14 -24 22 -30 30.25" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="-30" cy="30.25" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M-9 2C-12 14 -24 22 -18 31.75" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="-18" cy="31.75" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M-3 2C-4 14 0 22 -6 33.25" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="-6" cy="33.25" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M3 2C4 14 0 22 6 33.25" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="6" cy="33.25" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M9 2C12 14 24 22 18 31.75" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="18" cy="31.75" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M15 2C20 14 24 22 30 30.25" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="30" cy="30.25" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M21 2C28 14 48 22 42 28.75" fill="none" stroke="#8E7BFF" stroke-width="6" stroke-linecap="round"></path><circle cx="42" cy="28.75" r="3.2" fill="#B8ABFF"></circle>
+            <path d="M-28 4C-31 -42 31 -42 28 4C18 8 -18 8 -28 4Z" fill="#8E7BFF"></path>
+            <path d="M-18 -26C-12 -34 -2 -36 6 -34" fill="none" stroke="#B8ABFF" stroke-width="4" stroke-linecap="round"></path>
+            <ellipse cx="0" cy="-12" rx="11.5" ry="12.5" fill="#fff"></ellipse>
+            <circle cx="2" cy="-10" r="6.5" fill="#1A1440"></circle>
+            <circle cx="4.5" cy="-13" r="2.2" fill="#fff"></circle>
+            <ellipse cx="-17" cy="-2" rx="4" ry="2.4" fill="#F2A6D8" opacity="0.8"></ellipse>
+            <ellipse cx="17" cy="-2" rx="4" ry="2.4" fill="#F2A6D8" opacity="0.8"></ellipse>
+            <path d="M-5 2Q0 6 5 2" fill="none" stroke="#2A1F66" stroke-width="1.6" stroke-linecap="round"></path>
+            <path d="M0 -34C2 -42 8 -46 10 -50" fill="none" stroke="#8E7BFF" stroke-width="2.6" stroke-linecap="round"></path>
+          </svg>
+        </div>
+      </div>
+
+      <sc-for list="{{slots}}" as="m" hint-placeholder-count="4">
+        <div aria-hidden="true" style="position: absolute; left: {{m.x}}px; top: {{m.y}}px; width: 54px; height: 54px; box-sizing: border-box; border-radius: 50%; border: 1.5px dashed {{t.orbit}}; opacity: {{m.o}}"></div>
+      </sc-for>
+      <sc-for list="{{models}}" as="m" hint-placeholder-count="4">
+        <button class="{{m.cls}}" aria-pressed="{{m.on}}" aria-label="{{m.name}}" onClick="{{m.pick}}" style="all: unset; cursor: pointer; box-sizing: border-box; position: absolute; left: {{m.x}}px; top: {{m.y}}px; width: {{m.d}}px; height: {{m.d}}px; border-radius: 50%; background: {{t.sat}}; border: 3px solid {{m.ring}}; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; font-weight: 600; line-height: 12px; color: #14172E; padding: 0 4px">{{m.short}}</button>
+      </sc-for>
+    </div>
+
+    <div style="padding: 12px 20px 0; display: flex; flex-direction: column; gap: 2px" aria-live="polite">
+      <div style="font-family: Sora, sans-serif; font-weight: 600; font-size: 16px">“{{line}}”</div>
+      <div style="font-size: 12.5px; line-height: 17px; color: {{t.ink2}}"><b style="font-weight: 600; color: {{t.ink}}">{{modelName}}</b>{{rec}} · {{modelDesc}}</div>
+    </div>
+
+    <div role="group" aria-label="Assistant" style="margin: 14px 20px 0; display: flex; gap: 6px; padding: 4px; border-radius: 26px; background: {{t.well}}">
+      <sc-for list="{{clis}}" as="c" hint-placeholder-count="3">
+        <button aria-pressed="{{c.on}}" onClick="{{c.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 48px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 17px; font-weight: 600; font-size: 13.5px; background: {{c.bg}}; color: {{c.fg}}">{{c.label}}<span style="font-size: 11px; font-weight: 400; opacity: .72">{{c.maker}}</span></button>
+      </sc-for>
+    </div>
+
+    <div style="margin: 14px 20px 0">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px">
+        <span style="font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.ink3}}">How hard it thinks</span>
+        <span style="font-size: 12px; color: {{t.ink2}}">{{effortNote}}</span>
+      </div>
+      <div role="group" aria-label="Effort" style="display: flex; gap: 6px">
+        <sc-for list="{{efforts}}" as="e" hint-placeholder-count="5">
+          <button aria-pressed="{{e.on}}" aria-label="{{e.label}}" onClick="{{e.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 44px; border-radius: 14px; text-align: center; line-height: 44px; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid {{e.border}}; background: {{e.bg}}; color: {{e.fg}}">{{e.short}}</button>
+        </sc-for>
+      </div>
+      <div style="margin-top: 7px; font-size: 12.5px; line-height: 17px; color: {{t.ink2}}">{{hint}}</div>
+    </div>
+
+    <div style="margin: auto 20px 18px; display: flex; flex-direction: column; gap: 8px">
+      <a href="Main.dc.html" style="height: 50px; border-radius: 25px; background: {{t.ink}}; color: {{t.raise}}; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14.5px; text-decoration: none">Use for this thread</a>
+      <div style="font-size: 11.5px; line-height: 16px; text-align: center; color: {{t.ink3}}">Starts with your next message. Changing assistant keeps the whole conversation.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":true},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { cli: 'claude', model: 'fable', effort: 'xhigh' }; }
+  data() {
+    const E5 = ['low', 'medium', 'high', 'xhigh', 'max'], E6 = E5.concat(['ultra']), E3 = ['low', 'medium', 'high'];
+    return {
+      claude: { label: 'Claude', def: 'opus', models: [
+        { id: 'fable', name: 'Fable 5.1', short: 'Fable 5.1', efforts: E5, desc: "Most capable. Slowest, uses the most quota." }, { id: 'opus', name: 'Opus 5.5', short: 'Opus 5.5', efforts: E5, desc: "Very capable all-rounder for hard work." },
+        { id: 'sonnet', name: 'Sonnet 5.5', short: 'Sonnet 5.5', efforts: E5, desc: "Fast and capable for everyday work." }, { id: 'haiku', name: 'Haiku 4.5', short: 'Haiku 4.5', efforts: E5, desc: "Fastest and lightest, for quick asks." }] },
+      codex: { label: 'Codex', def: 'gpt-6-astra', models: [
+        { id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', short: '6.1 Sol', efforts: E6, desc: "Newest and most capable." }, { id: 'gpt-6-astra', name: 'GPT-6-Astra', short: '6 Astra', efforts: E6, desc: "Strong all-rounder." },
+        { id: 'gpt-6-sol', name: 'GPT-6-Sol', short: '6 Sol', efforts: E6, desc: "Capable, one step older." }, { id: 'gpt-6-luna', name: 'GPT-6-Luna', short: '6 Luna', efforts: E5, desc: "Lighter and faster." },
+        { id: 'gpt-5.6-sol', name: 'GPT-5.6-Sol', short: '5.6 Sol', efforts: E6, desc: "Previous generation, capable." }, { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra', short: '5.6 Terra', efforts: E6, desc: "Previous generation, balanced." },
+        { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna', short: '5.6 Luna', efforts: E5, desc: "Previous generation, lightest." }] },
+      agy: { label: 'Antigravity', def: 'gemini-4-argon', models: [
+        { id: 'gemini-4-argon', name: 'Gemini 4 Argon', short: 'Argon 4', efforts: E3, desc: "Google's most capable." }, { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', short: 'Flash 3.8', efforts: E3, desc: "Fast and light." },
+        { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', short: 'Opus 5.5', efforts: E3, desc: "Claude Opus, run through Antigravity." }, { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', short: 'Sonnet 5.5', efforts: E3, desc: "Claude Sonnet, run through Antigravity." },
+        { id: 'gpt-oss-120b', name: 'GPT-OSS 120B', short: 'OSS 120B', efforts: ['medium'], desc: "Open model with one setting." }] },
+    };
+  }
+  keep(efforts, want) { return efforts.includes(want) ? want : efforts.includes('medium') ? 'medium' : efforts[0]; }
+  renderVals() {
+    const night = this.props.night ?? true;
+    const t = night
+      ? { ink: '#E4E8F7', ink2: '#A8B0CC', ink3: '#8089A8', raise: '#141829', bg2: '#1E2340', line: 'rgba(228,232,247,.18)', accent: '#A9B8FF', well: 'rgba(228,232,247,.08)', sky1: '#05060F', sky2: '#171C40', starO: 1, planet: '#C8643F', ringC: '#E8A982', ground: '#1B2050', crater: '#0F1233', orbit: 'rgba(200,210,255,.45)', sat: '#CDD2EC', panel: '#6C7DFF' }
+      : { ink: '#14172E', ink2: '#41476A', ink3: '#5A6184', raise: '#F8F9FD', bg2: '#E6E8F4', line: 'rgba(20,23,46,.14)', accent: '#3D4FD1', well: '#E6E8F4', sky1: '#B9B4EE', sky2: '#F8D9CB', starO: 0.5, planet: '#E58C6A', ringC: '#F6CDB0', ground: '#A99BD6', crater: '#8070B8', orbit: 'rgba(40,30,90,.4)', sat: '#F4F3FC', panel: '#3D4FD1' };
+    const D = this.data(), s = this.state, cli = D[s.cli];
+    const model = cli.models.find((m) => m.id === s.model) || cli.models[0];
+    const effort = this.keep(model.efforts, s.effort);
+    const idx = model.efforts.indexOf(effort), n = model.efforts.length;
+    const frac = n === 1 ? 0.5 : idx / (n - 1), tier = Math.round(frac * 3);
+    const N = cli.models.length, R = 136, cx = 179, cy = 196;
+    const at = (i) => { const a = (N === 1 ? 270 : 198 + (i * 144) / (N - 1)) * Math.PI / 180; return { x: cx + R * Math.cos(a) - 27, y: cy + R * Math.sin(a) - 27 }; };
+    const slots = cli.models.map((m, i) => ({ ...at(i), o: m.id === model.id ? 1 : 0 }));
+    const models = cli.models.map((m, i) => {
+      const on = m.id === model.id, p = on ? { x: 190 - 31, y: 72 } : at(i);
+      return { ...m, on, x: p.x, y: p.y, d: on ? 62 : 54, cls: on ? 'orb on' : 'orb', ring: on ? '#FFD27A' : t.panel,
+        pick: () => this.setState({ model: m.id, effort: this.keep(m.efforts, effort) }) };
+    });
+    const rings = [0, 1, 2, 3, 4, 5].map((k) => { const d = 128 + k * 40; return { d, l: cx - d / 2, tp: 186 - d / 2, o: k <= idx ? 1 : 0, dur: [16, 12, 9, 7, 5.5, 4.5][Math.min(5, idx)] + k * 2 }; });
+    const stars = [[14, 18, 2], [40, 64, 3], [88, 30, 2], [120, 12, 2], [150, 54, 3], [228, 22, 2], [258, 70, 2], [70, 110, 2], [300, 96, 3], [20, 150, 2], [336, 140, 2], [110, 160, 2]].map(([x, y, r]) => ({ x, y, r }));
+    const SHORT = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const LONG = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const HINT = { low: 'Fast replies for simple asks. Uses the least quota.', medium: 'A good default for most things.', high: 'Takes longer on tricky work.', xhigh: 'For hard problems. Slower.', max: 'Its very best. Slowest, uses the most quota.', ultra: 'Beyond Deepest. Only some Codex models have it.' };
+    const efforts = model.efforts.map((e) => { const on = e === effort; return { label: LONG[e], short: SHORT[e], on,
+      bg: on ? t.accent : 'transparent', fg: on ? t.raise : t.ink, border: on ? t.accent : t.line, pick: () => this.setState({ effort: e }) }; });
+    const clis = ['claude', 'codex', 'agy'].map((k) => { const on = k === s.cli; return { label: D[k].label, maker: { claude: 'by Anthropic', codex: 'by OpenAI', agy: 'by Google' }[k], on, bg: on ? t.ink : 'transparent', fg: on ? t.raise : t.ink,
+      pick: () => { const m = D[k].models.find((x) => x.id === D[k].def); this.setState({ cli: k, model: m.id, effort: this.keep(m.efforts, effort) }); } }; });
+    const LINES = ['One slow orbit.', 'A steady orbit or two.', 'Wide orbits, spinning fast.', 'Every ring spinning at once.'];
+    return { t, stars, rings, slots, models, pet: { dur: [5, 4, 2.8, 1.8][tier] }, efforts, clis, line: LINES[tier],
+      summary: `${cli.label} · ${model.name} · ${LONG[effort]}`, modelName: model.name, modelDesc: model.desc, rec: model.id === cli.def ? ' (recommended)' : '', hint: n === 1 ? 'This model has one setting.' : HINT[effort], effortNote: n === 1 ? 'One setting only' : `${idx + 1} ${idx ? 'orbits' : 'orbit'}` };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saffron's bubbles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono&amp;family=Figtree:wght@400;600&amp;family=Fredoka:wght@600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+@keyframes wiggle{0%,100%{transform:translateX(0) rotate(0deg)}25%{transform:translateX(3px) rotate(3deg)}75%{transform:translateX(-3px) rotate(-3deg)}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes rise{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(-60px);opacity:0}}
+@keyframes sway{0%,100%{transform:skewX(-6deg)}50%{transform:skewX(6deg)}}
+.pet{transition:left .7s cubic-bezier(.45,0,.25,1),top .7s cubic-bezier(.45,0,.25,1)}
+.pet-in{animation:wiggle ease-in-out infinite}
+.bub{animation:bob 3.2s ease-in-out infinite}
+.trail{animation:rise linear infinite}
+.kelp{animation:sway 5s ease-in-out infinite;transform-origin:bottom center}
+button{font:inherit}
+button:focus-visible{outline:3px solid #1F7A8C;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: {{t.bg2}}; font-family: Figtree, sans-serif; color: {{t.ink}}">
+  <div aria-hidden="true" style="position: absolute; left: 18px; top: 26px; display: flex; align-items: center; gap: 9px; opacity: .45">
+    <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8" fill="none" stroke="{{t.accent}}" stroke-width="1.8" stroke-linecap="round"></path></svg>
+    <span style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 22px">Cinnamon</span>
+  </div>
+
+  <div role="dialog" aria-label="Model and effort for Cluster brain" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 0; background: {{t.raise}}; border-radius: 28px 28px 0 0; box-shadow: 0 -18px 50px rgba(0,0,0,.18); display: flex; flex-direction: column">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{t.line}}; margin-top: 8px"></div>
+    <div style="display: flex; align-items: center; padding: 6px 8px 8px 20px">
+      <div style="flex: 1">
+        <div style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 22px">Model &amp; effort</div>
+        <div style="font-size: 12.5px; color: {{t.ink2}}">For Cluster brain · tap a bubble and Saffron swims to it</div>
+      </div>
+      <a href="Main.dc.html" aria-label="Close" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="{{t.ink}}" stroke-width="2" stroke-linecap="round"></path></svg>
+      </a>
+    </div>
+
+    <div style="margin: 0 16px; height: 282px; border-radius: 22px; position: relative; overflow: hidden; background: linear-gradient(180deg, {{t.w1}} 0%, {{t.w2}} 100%)">
+      <div aria-hidden="true" style="position: absolute; left: 40px; top: -20px; width: 60px; height: 260px; background: linear-gradient(180deg, {{t.ray}}, transparent); transform: skewX(-18deg)"></div>
+      <div aria-hidden="true" style="position: absolute; left: 190px; top: -20px; width: 40px; height: 220px; background: linear-gradient(180deg, {{t.ray}}, transparent); transform: skewX(-18deg)"></div>
+      <div aria-hidden="true" style="position: absolute; left: -20px; right: -20px; bottom: -40px; height: 80px; border-radius: 50%; background: {{t.sand}}"></div>
+      <div aria-hidden="true" style="position: absolute; left: 230px; bottom: 6px; width: 70px; height: 14px; border-radius: 50%; background: {{t.sand2}}"></div>
+      <div class="kelp" aria-hidden="true" style="position: absolute; left: 22px; bottom: 10px; width: 14px; height: 150px; border-radius: 8px; background: {{t.kelp}}"></div>
+      <div class="kelp" aria-hidden="true" style="position: absolute; left: 44px; bottom: 10px; width: 10px; height: 110px; border-radius: 6px; background: {{t.kelp2}}; animation-delay: -2s"></div>
+      <div class="kelp" aria-hidden="true" style="position: absolute; right: 26px; bottom: 12px; width: 12px; height: 96px; border-radius: 7px; background: {{t.kelp}}; animation-delay: -1s"></div>
+      <div aria-hidden="true" style="position: absolute; left: 300px; bottom: 16px; width: 28px; height: 22px; border-radius: 14px 14px 4px 4px; background: {{t.coral}}"></div>
+
+      <sc-for list="{{models}}" as="m" hint-placeholder-count="7">
+        <button class="bub" aria-pressed="{{m.on}}" aria-label="{{m.name}}" onClick="{{m.pick}}" style="all: unset; cursor: pointer; box-sizing: border-box; position: absolute; left: {{m.x}}px; top: {{m.y}}px; width: 58px; height: 58px; border-radius: 50%; background: {{t.bub}}; border: {{m.rim}}; box-shadow: inset -6px -8px 14px rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; font-weight: 600; line-height: 12px; color: {{t.bubInk}}; padding: 0 5px; animation-delay: {{m.delay}}s">{{m.short}}</button>
+      </sc-for>
+
+      <sc-for list="{{trail}}" as="b" hint-placeholder-count="4">
+        <div class="trail" aria-hidden="true" style="position: absolute; left: {{b.x}}px; top: {{b.y}}px; width: {{b.d}}px; height: {{b.d}}px; border-radius: 50%; border: 1.5px solid {{t.rim}}; animation-duration: {{b.dur}}s; animation-delay: {{b.delay}}s"></div>
+      </sc-for>
+      <div class="pet" aria-hidden="true" style="position: absolute; left: {{pet.x}}px; top: {{pet.y}}px; width: 91px; height: 60px">
+        <div class="pet-in" style="width: 91px; height: 60px; animation-duration: {{pet.dur}}s">
+          <svg width="91" height="60" viewBox="-38 -24 70 46">
+            <path d="M-18 0L-33 -12L-30 0L-33 12Z" fill="#E8792A"></path>
+            <ellipse cx="0" cy="0" rx="20" ry="14.5" fill="#F59A3E"></ellipse>
+            <path d="M-7 -13.5C-3 -5 -3 5 -7 13.5M7 -13C10 -5 10 5 7 13" fill="none" stroke="#fff" stroke-width="3.6"></path>
+            <path d="M-6 -13C0 -23 9 -21 11 -12Z" fill="#E8792A"></path>
+            <circle cx="12" cy="-3" r="3.3" fill="#1A120D"></circle>
+            <circle cx="12.8" cy="-4" r="1.1" fill="#fff"></circle>
+            <path d="M19 3Q17 5.5 14.5 4.5" fill="none" stroke="#7A3A12" stroke-width="1.3" stroke-linecap="round"></path>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 12px 20px 0; display: flex; flex-direction: column; gap: 2px" aria-live="polite">
+      <div style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 17px">“{{line}}”</div>
+      <div style="font-size: 12.5px; line-height: 17px; color: {{t.ink2}}"><b style="font-weight: 600; color: {{t.ink}}">{{modelName}}</b>{{rec}} · {{modelDesc}}</div>
+    </div>
+
+    <div role="group" aria-label="Assistant" style="margin: 14px 20px 0; display: flex; gap: 6px; padding: 4px; border-radius: 26px; background: {{t.well}}">
+      <sc-for list="{{clis}}" as="c" hint-placeholder-count="3">
+        <button aria-pressed="{{c.on}}" onClick="{{c.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 48px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 17px; font-weight: 600; font-size: 14px; background: {{c.bg}}; color: {{c.fg}}">{{c.label}}<span style="font-size: 11px; font-weight: 400; opacity: .72">{{c.maker}}</span></button>
+      </sc-for>
+    </div>
+
+    <div style="margin: 14px 20px 0">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.ink3}}">How hard it thinks</span>
+        <span style="font-size: 12.5px; color: {{t.ink2}}">{{effortNote}}</span>
+      </div>
+      <div role="group" aria-label="Effort" style="display: flex; gap: 6px">
+        <sc-for list="{{efforts}}" as="e" hint-placeholder-count="6">
+          <button aria-pressed="{{e.on}}" aria-label="{{e.label}}" onClick="{{e.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 44px; border-radius: 14px; text-align: center; line-height: 44px; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid {{e.border}}; background: {{e.bg}}; color: {{e.fg}}">{{e.short}}</button>
+        </sc-for>
+      </div>
+      <div style="margin-top: 7px; font-size: 12.5px; line-height: 17px; color: {{t.ink2}}">{{hint}}</div>
+    </div>
+
+    <div style="margin: auto 20px 18px; display: flex; flex-direction: column; gap: 8px">
+      <a href="Main.dc.html" style="height: 50px; border-radius: 25px; background: {{t.ink}}; color: {{t.raise}}; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; text-decoration: none">Use for this thread</a>
+      <div style="font-size: 12px; line-height: 16px; text-align: center; color: {{t.ink3}}">Starts with your next message. Changing assistant keeps the whole conversation.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { cli: 'codex', model: 'gpt-6.1-sol', effort: 'high' }; }
+  data() {
+    const E5 = ['low', 'medium', 'high', 'xhigh', 'max'], E6 = E5.concat(['ultra']), E3 = ['low', 'medium', 'high'];
+    return {
+      claude: { label: 'Claude', def: 'opus', models: [
+        { id: 'fable', name: 'Fable 5.1', short: 'Fable 5.1', efforts: E5, desc: "Most capable. Slowest, uses the most quota." }, { id: 'opus', name: 'Opus 5.5', short: 'Opus 5.5', efforts: E5, desc: "Very capable all-rounder for hard work." },
+        { id: 'sonnet', name: 'Sonnet 5.5', short: 'Sonnet 5.5', efforts: E5, desc: "Fast and capable for everyday work." }, { id: 'haiku', name: 'Haiku 4.5', short: 'Haiku 4.5', efforts: E5, desc: "Fastest and lightest, for quick asks." }] },
+      codex: { label: 'Codex', def: 'gpt-6-astra', models: [
+        { id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', short: '6.1 Sol', efforts: E6, desc: "Newest and most capable." }, { id: 'gpt-6-astra', name: 'GPT-6-Astra', short: '6 Astra', efforts: E6, desc: "Strong all-rounder." },
+        { id: 'gpt-6-sol', name: 'GPT-6-Sol', short: '6 Sol', efforts: E6, desc: "Capable, one step older." }, { id: 'gpt-6-luna', name: 'GPT-6-Luna', short: '6 Luna', efforts: E5, desc: "Lighter and faster." },
+        { id: 'gpt-5.6-sol', name: 'GPT-5.6-Sol', short: '5.6 Sol', efforts: E6, desc: "Previous generation, capable." }, { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra', short: '5.6 Terra', efforts: E6, desc: "Previous generation, balanced." },
+        { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna', short: '5.6 Luna', efforts: E5, desc: "Previous generation, lightest." }] },
+      agy: { label: 'Antigravity', def: 'gemini-4-argon', models: [
+        { id: 'gemini-4-argon', name: 'Gemini 4 Argon', short: 'Argon 4', efforts: E3, desc: "Google's most capable." }, { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', short: 'Flash 3.8', efforts: E3, desc: "Fast and light." },
+        { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', short: 'Opus 5.5', efforts: E3, desc: "Claude Opus, run through Antigravity." }, { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', short: 'Sonnet 5.5', efforts: E3, desc: "Claude Sonnet, run through Antigravity." },
+        { id: 'gpt-oss-120b', name: 'GPT-OSS 120B', short: 'OSS 120B', efforts: ['medium'], desc: "Open model with one setting." }] },
+    };
+  }
+  keep(efforts, want) { return efforts.includes(want) ? want : efforts.includes('medium') ? 'medium' : efforts[0]; }
+  renderVals() {
+    const night = this.props.night ?? false;
+    const t = night
+      ? { ink: '#D8EEF0', ink2: '#A3C6CB', ink3: '#7FA4AA', raise: '#0F2D38', bg2: '#163A46', line: 'rgba(216,238,240,.18)', accent: '#5CC8D7', well: 'rgba(216,238,240,.08)', w1: '#0E3746', w2: '#03121A', ray: 'rgba(255,255,255,0)', sand: '#34464A', sand2: '#26363A', kelp: '#164A3A', kelp2: '#10382C', coral: '#8A4A40', bub: 'rgba(14,55,70,.86)', bubInk: '#D8EEF0', rim: 'rgba(160,230,240,.6)' }
+      : { ink: '#0B2A33', ink2: '#265660', ink3: '#3A6A73', raise: '#F2FAFA', bg2: '#DCEFEF', line: 'rgba(11,42,51,.14)', accent: '#1F7A8C', well: '#DCEFEF', w1: '#C4EEEC', w2: '#2C8A9B', ray: 'rgba(255,255,255,.3)', sand: '#EAD9AF', sand2: '#D8C190', kelp: '#3E8A5C', kelp2: '#2F7550', coral: '#F28A6B', bub: 'rgba(255,255,255,.74)', bubInk: '#0B2A33', rim: 'rgba(255,255,255,.9)' };
+    const D = this.data(), s = this.state, cli = D[s.cli];
+    const model = cli.models.find((m) => m.id === s.model) || cli.models[0];
+    const effort = this.keep(model.efforts, s.effort);
+    const idx = model.efforts.indexOf(effort), n = model.efforts.length;
+    const frac = n === 1 ? 0.5 : idx / (n - 1), tier = Math.round(frac * 3);
+    const SPOTS = [[108, 22], [200, 14], [284, 46], [150, 96], [256, 118], [112, 168], [214, 176]];
+    let pet = { x: 0, y: 0 };
+    const models = cli.models.map((m, i) => {
+      const [x, y] = SPOTS[i], on = m.id === model.id;
+      if (on) pet = { x: x - 84, y: y - 2 };
+      return { ...m, x, y, on, delay: -(i * 0.45), rim: on ? '3px solid #F59A3E' : `1.5px solid ${t.rim}`,
+        pick: () => this.setState({ model: m.id, effort: this.keep(m.efforts, effort) }) };
+    });
+    const count = Math.round(1 + frac * 5);
+    const trail = Array.from({ length: count }, (_, k) => ({ x: pet.x + 4 - (k % 3) * 9, y: pet.y + 26 - k * 4, d: 6 + (k % 3) * 3,
+      dur: [3.2, 2.4, 1.6, 1.1][tier] + (k % 2) * 0.3, delay: -k * 0.35 }));
+    pet.dur = [3.2, 2.2, 1.2, 0.6][tier];
+    const SHORT = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const LONG = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const HINT = { low: 'Fast replies for simple asks. Uses the least quota.', medium: 'A good default for most things.', high: 'Takes longer on tricky work.', xhigh: 'For hard problems. Slower.', max: 'Its very best. Slowest, uses the most quota.', ultra: 'Beyond Deepest. Only some Codex models have it.' };
+    const efforts = model.efforts.map((e) => { const on = e === effort; return { label: LONG[e], short: SHORT[e], on,
+      bg: on ? t.accent : 'transparent', fg: on ? t.raise : t.ink, border: on ? t.accent : t.line, pick: () => this.setState({ effort: e }) }; });
+    const clis = ['claude', 'codex', 'agy'].map((k) => { const on = k === s.cli; return { label: D[k].label, maker: { claude: 'by Anthropic', codex: 'by OpenAI', agy: 'by Google' }[k], on, bg: on ? t.ink : 'transparent', fg: on ? t.raise : t.ink,
+      pick: () => { const m = D[k].models.find((x) => x.id === D[k].def); this.setState({ cli: k, model: m.id, effort: this.keep(m.efforts, effort) }); } }; });
+    const LINES = ['Drifting with the tide.', 'Swimming along.', 'Racing the current.', 'Full speed, bubbles everywhere.'];
+    return { t, models, trail, pet, efforts, clis, line: LINES[tier], summary: `${cli.label} · ${model.name} · ${LONG[effort]}`, modelName: model.name, modelDesc: model.desc, rec: model.id === cli.def ? ' (recommended)' : '', hint: n === 1 ? 'This model has one setting.' : HINT[effort],
+      effortNote: n === 1 ? 'One setting only' : 'More bubbles, harder thinking' };
+  }
+}
+</script>
+</body>
+</html>

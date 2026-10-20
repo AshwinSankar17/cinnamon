@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crumb's ticket rail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono&amp;family=Fraunces:wght@600&amp;family=Instrument+Sans:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+@keyframes hop{0%,62%,100%{transform:translateY(0)}70%{transform:translateY(-10px)}78%{transform:translateY(0)}86%{transform:translateY(-5px)}}
+@keyframes sway{0%,100%{transform:translateY(10px) rotate(-4deg)}50%{transform:translateY(10px) rotate(2deg)}}
+.pet{transition:left .5s cubic-bezier(.65,0,.35,1),top .5s cubic-bezier(.65,0,.35,1)}
+.pet-in{animation:hop linear infinite;transform-origin:bottom}
+.tix{transition:transform .35s ease,box-shadow .35s ease}
+.tix.on{animation:sway 2.4s ease-in-out infinite}
+.pile{transition:opacity .3s ease,transform .3s ease}
+button{font:inherit}
+button:focus-visible{outline:3px solid #B4561F;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: {{t.bg2}}; font-family: 'Instrument Sans', sans-serif; color: {{t.ink}}">
+  <div aria-hidden="true" style="position: absolute; left: 18px; top: 26px; display: flex; align-items: center; gap: 9px; opacity: .45">
+    <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6a8 8 0 1 1-8-8" fill="none" stroke="{{t.accent}}" stroke-width="1.8" stroke-linecap="round"></path></svg>
+    <span style="font-family: Fraunces, serif; font-weight: 600; font-size: 21px">Cinnamon</span>
+  </div>
+
+  <div role="dialog" aria-label="Model and effort for Cluster brain" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 0; background: {{t.raise}}; border-radius: 28px 28px 0 0; box-shadow: 0 -18px 50px rgba(0,0,0,.18); display: flex; flex-direction: column">
+    <div aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: {{t.line}}; margin-top: 8px"></div>
+    <div style="display: flex; align-items: center; padding: 6px 8px 8px 20px">
+      <div style="flex: 1">
+        <div style="font-family: Fraunces, serif; font-weight: 600; font-size: 21px">Model &amp; effort</div>
+        <div style="font-size: 12.5px; color: {{t.ink2}}">For Cluster brain · tap a ticket and Crumb fetches it</div>
+      </div>
+      <a href="Main.dc.html" aria-label="Close" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="{{t.ink}}" stroke-width="2" stroke-linecap="round"></path></svg>
+      </a>
+    </div>
+
+    <div style="margin: 0 16px; height: 282px; border-radius: 22px; position: relative; overflow: hidden; background: {{t.wall}}; background-image: repeating-linear-gradient(0deg, {{t.tileLine}} 0 1px, transparent 1px 34px), repeating-linear-gradient(90deg, {{t.tileLine}} 0 1px, transparent 1px 34px)">
+      <sc-for list="{{rails}}" as="r" hint-placeholder-count="1">
+        <div aria-hidden="true" style="position: absolute; left: 14px; right: 14px; top: {{r.y}}px; height: 5px; border-radius: 3px; background: {{t.rail}}"></div>
+      </sc-for>
+      <sc-for list="{{models}}" as="m" hint-placeholder-count="4">
+        <button class="{{m.cls}}" aria-pressed="{{m.on}}" aria-label="{{m.name}}" onClick="{{m.pick}}" style="all: unset; cursor: pointer; box-sizing: border-box; position: absolute; left: {{m.x}}px; top: {{m.y}}px; width: {{m.w}}px; height: {{m.h}}px; border-radius: 4px 4px 8px 8px; background: {{t.paper}}; border: 2px solid {{m.border}}; box-shadow: {{m.shadow}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transform-origin: top center; color: #2A1A10">
+          <span aria-hidden="true" style="position: absolute; top: -7px; width: 14px; height: 9px; border-radius: 2px; background: {{t.rail}}"></span>
+          <span style="font-family: 'DM Mono', monospace; font-size: 11.5px; line-height: 14px; text-align: center; padding: 0 3px">{{m.short}}</span>
+          <span aria-hidden="true" style="width: 60%; height: 1px; background: #E7CBA6"></span>
+          <span aria-hidden="true" style="font-family: 'DM Mono', monospace; font-size: 11px; color: #7D6756">№ {{m.n}}</span>
+        </button>
+      </sc-for>
+
+      <div class="pet" aria-hidden="true" style="position: absolute; left: {{pet.x}}px; top: {{pet.y}}px; width: 76px; height: 52px">
+        <div class="pet-in" style="width: 76px; height: 52px; animation-duration: {{pet.dur}}s">
+          <svg width="76" height="52" viewBox="-40 -48 76 52">
+            <path d="M14 -18L36 -27L31 -13Z" fill="#7A5236"></path>
+            <ellipse cx="2" cy="-18" rx="18" ry="13" fill="#A8774E"></ellipse>
+            <ellipse cx="-4" cy="-13" rx="12" ry="8" fill="#EEDCC3"></ellipse>
+            <path d="M-2 -25C10 -29 21 -22 18 -11C10 -13 2 -16 -2 -25Z" fill="#7E5434"></path>
+            <circle cx="-14" cy="-32" r="10" fill="#9A6A44"></circle>
+            <path d="M-23.5 -35C-21 -44 -8 -45 -5 -36C-10 -38.5 -17 -38.5 -23.5 -35Z" fill="#6E4A2E"></path>
+            <circle cx="-17" cy="-28.5" r="3.6" fill="#EEDCC3"></circle>
+            <circle cx="-17" cy="-33" r="2.3" fill="#1A120D"></circle>
+            <circle cx="-17.8" cy="-33.8" r="0.75" fill="#fff"></circle>
+            <path d="M-24 -32.5L-32 -30.5L-24 -28.3Z" fill="#E7A93E"></path>
+            <path d="M-3 -6V0M4 -6V0" stroke="#C78A4A" stroke-width="1.8" stroke-linecap="round"></path>
+          </svg>
+        </div>
+      </div>
+
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: {{t.wood}}"></div>
+      <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 40px; height: 9px; background: {{t.top}}"></div>
+      <sc-for list="{{piles}}" as="p" hint-placeholder-count="6">
+        <div class="pile" aria-hidden="true" style="position: absolute; bottom: 47px; left: {{p.x}}px; opacity: {{p.o}}; transform: scale({{p.s}}); transform-origin: bottom center">
+          <svg width="34" height="16" viewBox="0 0 34 16"><circle cx="9" cy="11" r="5" fill="#E9C08E"></circle><circle cx="18" cy="9" r="6" fill="#D49B65"></circle><circle cx="26" cy="12" r="4" fill="#E9C08E"></circle><circle cx="15" cy="13" r="3" fill="#B9784A"></circle></svg>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="padding: 12px 20px 0; display: flex; flex-direction: column; gap: 2px" aria-live="polite">
+      <div style="font-family: Fraunces, serif; font-weight: 600; font-size: 17px">“{{line}}”</div>
+      <div style="font-size: 12.5px; line-height: 17px; color: {{t.ink2}}"><b style="font-weight: 600; color: {{t.ink}}">{{modelName}}</b>{{rec}} · {{modelDesc}}</div>
+    </div>
+
+    <div role="group" aria-label="Assistant" style="margin: 14px 20px 0; display: flex; gap: 6px; padding: 4px; border-radius: 26px; background: {{t.well}}">
+      <sc-for list="{{clis}}" as="c" hint-placeholder-count="3">
+        <button aria-pressed="{{c.on}}" onClick="{{c.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 48px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 17px; font-weight: 600; font-size: 14px; background: {{c.bg}}; color: {{c.fg}}">{{c.label}}<span style="font-size: 11px; font-weight: 400; opacity: .72">{{c.maker}}</span></button>
+      </sc-for>
+    </div>
+
+    <div style="margin: 14px 20px 0">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.ink3}}">How hard it thinks</span>
+        <span style="font-size: 12.5px; color: {{t.ink2}}">{{effortNote}}</span>
+      </div>
+      <div role="group" aria-label="Effort" style="display: flex; gap: 6px">
+        <sc-for list="{{efforts}}" as="e" hint-placeholder-count="5">
+          <button aria-pressed="{{e.on}}" aria-label="{{e.label}}" onClick="{{e.pick}}" style="all: unset; cursor: pointer; flex: 1; height: 44px; border-radius: 14px; text-align: center; line-height: 44px; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid {{e.border}}; background: {{e.bg}}; color: {{e.fg}}">{{e.short}}</button>
+        </sc-for>
+      </div>
+      <div style="margin-top: 7px; font-size: 12.5px; line-height: 17px; color: {{t.ink2}}">{{hint}}</div>
+    </div>
+
+    <div style="margin: auto 20px 18px; display: flex; flex-direction: column; gap: 8px">
+      <a href="Main.dc.html" style="height: 50px; border-radius: 25px; background: {{t.ink}}; color: {{t.raise}}; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; text-decoration: none">Use for this thread</a>
+      <div style="font-size: 12px; line-height: 16px; text-align: center; color: {{t.ink3}}">Starts with your next message. Changing assistant keeps the whole conversation.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { cli: 'claude', model: 'opus', effort: 'high' }; }
+  data() {
+    const E5 = ['low', 'medium', 'high', 'xhigh', 'max'], E6 = E5.concat(['ultra']), E3 = ['low', 'medium', 'high'];
+    return {
+      claude: { label: 'Claude', def: 'opus', models: [
+        { id: 'fable', name: 'Fable 5.1', short: 'Fable 5.1', efforts: E5, desc: "Most capable. Slowest, uses the most quota." }, { id: 'opus', name: 'Opus 5.5', short: 'Opus 5.5', efforts: E5, desc: "Very capable all-rounder for hard work." },
+        { id: 'sonnet', name: 'Sonnet 5.5', short: 'Sonnet 5.5', efforts: E5, desc: "Fast and capable for everyday work." }, { id: 'haiku', name: 'Haiku 4.5', short: 'Haiku 4.5', efforts: E5, desc: "Fastest and lightest, for quick asks." }] },
+      codex: { label: 'Codex', def: 'gpt-6-astra', models: [
+        { id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', short: '6.1 Sol', efforts: E6, desc: "Newest and most capable." }, { id: 'gpt-6-astra', name: 'GPT-6-Astra', short: '6 Astra', efforts: E6, desc: "Strong all-rounder." },
+        { id: 'gpt-6-sol', name: 'GPT-6-Sol', short: '6 Sol', efforts: E6, desc: "Capable, one step older." }, { id: 'gpt-6-luna', name: 'GPT-6-Luna', short: '6 Luna', efforts: E5, desc: "Lighter and faster." },
+        { id: 'gpt-5.6-sol', name: 'GPT-5.6-Sol', short: '5.6 Sol', efforts: E6, desc: "Previous generation, capable." }, { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra', short: '5.6 Terra', efforts: E6, desc: "Previous generation, balanced." },
+        { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna', short: '5.6 Luna', efforts: E5, desc: "Previous generation, lightest." }] },
+      agy: { label: 'Antigravity', def: 'gemini-4-argon', models: [
+        { id: 'gemini-4-argon', name: 'Gemini 4 Argon', short: 'Argon 4', efforts: E3, desc: "Google's most capable." }, { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', short: 'Flash 3.8', efforts: E3, desc: "Fast and light." },
+        { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', short: 'Opus 5.5', efforts: E3, desc: "Claude Opus, run through Antigravity." }, { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', short: 'Sonnet 5.5', efforts: E3, desc: "Claude Sonnet, run through Antigravity." },
+        { id: 'gpt-oss-120b', name: 'GPT-OSS 120B', short: 'OSS 120B', efforts: ['medium'], desc: "Open model with one setting." }] },
+    };
+  }
+  keep(efforts, want) { return efforts.includes(want) ? want : efforts.includes('medium') ? 'medium' : efforts[0]; }
+  renderVals() {
+    const night = this.props.night ?? false;
+    const t = night
+      ? { ink: '#F6E8D6', ink2: '#D0BBA5', ink3: '#AA937E', raise: '#2C2019', bg2: '#3A2B21', line: 'rgba(246,232,214,.18)', accent: '#F0A35E', well: 'rgba(246,232,214,.08)', wall: '#3A2A20', tileLine: '#4C382B', rail: '#6E6A66', paper: '#F2E6D3', wood: '#5E3B22', top: '#7A4F2E' }
+      : { ink: '#2A1A10', ink2: '#5E4636', ink3: '#7D6756', raise: '#FFFBF5', bg2: '#F3E6D4', line: 'rgba(42,26,16,.14)', accent: '#B4561F', well: '#F3E6D4', wall: '#F7E7D0', tileLine: '#EBD3B3', rail: '#A3A7AB', paper: '#FFFDF8', wood: '#B9784A', top: '#D49B65' };
+    const D = this.data(), s = this.state, cli = D[s.cli];
+    const model = cli.models.find((m) => m.id === s.model) || cli.models[0];
+    const effort = this.keep(model.efforts, s.effort);
+    const idx = model.efforts.indexOf(effort), n = model.efforts.length;
+    const tier = n === 1 ? 1 : Math.round((idx / (n - 1)) * 3);
+    const N = cli.models.length, rows = N > 4 ? 2 : 1, per = Math.ceil(N / rows);
+    const railY = rows === 1 ? [62] : [40, 140], w = rows === 1 ? 72 : 62, h = rows === 1 ? 84 : 66, gap = rows === 1 ? 12 : 8;
+    let pet = { x: 0, y: 0 };
+    const models = cli.models.map((m, i) => {
+      const r = Math.floor(i / per), col = i % per, inRow = Math.min(per, N - r * per);
+      const x0 = (358 - inRow * w - (inRow - 1) * gap) / 2, x = x0 + col * (w + gap), y = railY[r] + 8, on = m.id === model.id;
+      if (on) pet = { x: x + w / 2 - 34, y: railY[r] - 48 };
+      return { ...m, n: i + 1, x, y, w, h, on, cls: on ? 'tix on' : 'tix', border: on ? t.accent : 'transparent',
+        shadow: on ? '0 10px 18px rgba(42,26,16,.22)' : '0 3px 6px rgba(42,26,16,.12)',
+        pick: () => this.setState({ model: m.id, effort: this.keep(m.efforts, effort) }) };
+    });
+    const durs = [3.6, 2.6, 1.8, 1.25, 0.85, 0.6];
+    pet.dur = durs[Math.round((idx / Math.max(1, n - 1)) * 5)];
+    const piles = [0, 1, 2, 3, 4, 5].map((k) => ({ x: 22 + k * 54, o: k <= idx ? 1 : 0, s: k <= idx ? 1 : 0.4 }));
+    const LONG = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const SHORT = { low: 'Quick', medium: 'Balanced', high: 'Thorough', xhigh: 'Deep', max: 'Deepest', ultra: 'All out' };
+    const HINT = { low: 'Fast replies for simple asks. Uses the least quota.', medium: 'A good default for most things.', high: 'Takes longer on tricky work.', xhigh: 'For hard problems. Slower.', max: 'Its very best. Slowest, uses the most quota.', ultra: 'Beyond Deepest. Only some Codex models have it.' };
+    const efforts = model.efforts.map((e) => { const on = e === effort; return { label: LONG[e], short: SHORT[e], on,
+      bg: on ? t.accent : 'transparent', fg: on ? t.raise : t.ink, border: on ? t.accent : t.line, pick: () => this.setState({ effort: e }) }; });
+    const clis = ['claude', 'codex', 'agy'].map((k) => { const on = k === s.cli; return { label: D[k].label, maker: { claude: 'by Anthropic', codex: 'by OpenAI', agy: 'by Google' }[k], on, bg: on ? t.ink : 'transparent', fg: on ? t.raise : t.ink,
+      pick: () => { const m = D[k].models.find((x) => x.id === D[k].def); this.setState({ cli: k, model: m.id, effort: this.keep(m.efforts, effort) }); } }; });
+    const LINES = ['Just a nibble.', 'A proper breakfast.', 'Gathering every crumb.', 'Emptying the whole bakery.'];
+    return { t, models, pet, piles, efforts, clis, rails: railY.slice(0, rows).map((y) => ({ y })),
+      line: LINES[tier], summary: `${cli.label} · ${model.name} · ${LONG[effort]}`, modelName: model.name, modelDesc: model.desc, rec: model.id === cli.def ? ' (recommended)' : '', hint: n === 1 ? 'This model has one setting.' : HINT[effort],
+      effortNote: n === 1 ? 'One setting only' : `${idx + 1} of ${n} · ${idx + 1} ${idx ? 'piles' : 'pile'} of crumbs` };
+  }
+}
+</script>
+</body>
+</html>
